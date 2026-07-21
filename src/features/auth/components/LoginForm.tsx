@@ -59,6 +59,12 @@ export function LoginForm() {
         value={password}
         onChange={(e) => setPassword(e.target.value)}
       />
+      <Link
+        href="/recuperar"
+        className="-mt-2 self-end text-xs font-semibold text-primary"
+      >
+        ¿Olvidaste tu contraseña?
+      </Link>
 
       {error ? (
         <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600">

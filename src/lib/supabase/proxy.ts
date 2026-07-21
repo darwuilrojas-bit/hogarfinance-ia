@@ -2,7 +2,11 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { isSupabaseConfigured } from "./config";
 
-const RUTAS_PUBLICAS = ["/login", "/registro"];
+const RUTAS_PUBLICAS = ["/login", "/registro", "/recuperar"];
+// El link de recuperación deja al usuario con una sesión temporal:
+// esta ruta debe verse haya o no sesión, así que no sigue la regla
+// general de "si hay usuario, redirigir al inicio".
+const RUTA_SIEMPRE_PUBLICA = "/restablecer";
 
 /**
  * Refresca la sesión del usuario en cada petición y protege
@@ -44,6 +48,10 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const { pathname } = request.nextUrl;
+  if (pathname.startsWith(RUTA_SIEMPRE_PUBLICA)) {
+    return supabaseResponse;
+  }
+
   const esRutaPublica = RUTAS_PUBLICAS.some((ruta) =>
     pathname.startsWith(ruta)
   );
