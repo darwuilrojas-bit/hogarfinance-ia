@@ -21,6 +21,7 @@ type FacturaEmbebida = {
   estado: EstadoFactura;
   numero_comprobante: string | null;
   fecha_vencimiento: string | null;
+  imagen_url: string | null;
 };
 
 type ComprobanteRow = {
@@ -125,7 +126,7 @@ export function BuscadorComprobantes() {
         supabase
           .from("comprobantes_pago")
           .select(
-            "id, monto, fecha_pago, metodo_pago, numero_operacion, imagen_url, factura:facturas(proveedor, categoria, periodo_mes, periodo_anio, estado, numero_comprobante, fecha_vencimiento)"
+            "id, monto, fecha_pago, metodo_pago, numero_operacion, imagen_url, factura:facturas(proveedor, categoria, periodo_mes, periodo_anio, estado, numero_comprobante, fecha_vencimiento, imagen_url)"
           )
           .order("fecha_pago", { ascending: false })
           .limit(500),
@@ -139,8 +140,9 @@ export function BuscadorComprobantes() {
       setProveedores((provRes.data ?? []).map((p) => p.nombre));
 
       // URLs firmadas para las miniaturas, en una sola llamada
+      // (imagen del comprobante de pago + imagen de la factura original)
       const rutas = lista
-        .map((c) => c.imagen_url)
+        .flatMap((c) => [c.imagen_url, c.factura?.imagen_url ?? null])
         .filter((r): r is string => r !== null);
       if (rutas.length > 0) {
         const { data: firmadas } = await supabase.storage
@@ -210,12 +212,12 @@ export function BuscadorComprobantes() {
     setVersion((v) => v + 1);
   }
 
-  async function descargar(c: ComprobanteRow) {
-    if (!c.imagen_url) return;
+  async function descargar(ruta: string | null) {
+    if (!ruta) return;
     const supabase = createClient();
     const { data } = await supabase.storage
       .from(BUCKET_COMPROBANTES)
-      .createSignedUrl(c.imagen_url, 300, { download: true });
+      .createSignedUrl(ruta, 300, { download: true });
     if (data?.signedUrl) window.open(data.signedUrl, "_blank");
   }
 
@@ -460,24 +462,67 @@ export function BuscadorComprobantes() {
 
                     {abierto ? (
                       <div className="border-t border-gray-100 px-4 py-4">
-                        {/* Imagen completa con zoom al tocar */}
-                        {url && !pdf ? (
-                          <button
-                            type="button"
-                            onClick={() => setZoom(url)}
-                            className="mb-3 w-full"
-                            aria-label="Ampliar comprobante"
-                          >
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              src={url}
-                              alt={`Comprobante de ${c.factura.proveedor}`}
-                              className="max-h-64 w-full rounded-xl bg-gray-50 object-contain"
-                            />
-                            <span className="mt-1 block text-center text-[10px] text-gray-400">
-                              Tocá la imagen para ampliar
-                            </span>
-                          </button>
+                        {/* Factura original */}
+                        {c.factura.imagen_url ? (
+                          <div className="mb-3">
+                            <p className="mb-1 text-[11px] font-semibold text-primary">
+                              📄 Factura original
+                            </p>
+                            {esPdf(c.factura.imagen_url) ? (
+                              <p className="rounded-xl bg-gray-50 px-3 py-2 text-xs text-gray-500">
+                                Comprobante en PDF adjunto
+                              </p>
+                            ) : urls[c.factura.imagen_url] ? (
+                              <button
+                                type="button"
+                                onClick={() => setZoom(urls[c.factura.imagen_url!])}
+                                className="w-full"
+                                aria-label="Ampliar factura"
+                              >
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img
+                                  src={urls[c.factura.imagen_url]}
+                                  alt={`Factura de ${c.factura.proveedor}`}
+                                  className="max-h-56 w-full rounded-xl bg-gray-50 object-contain"
+                                />
+                              </button>
+                            ) : (
+                              <div className="h-32 animate-pulse rounded-xl bg-gray-100" />
+                            )}
+                          </div>
+                        ) : null}
+
+                        {/* Comprobante de pago */}
+                        {c.imagen_url ? (
+                          <div className="mb-3">
+                            <p className="mb-1 text-[11px] font-semibold text-secondary">
+                              💳 Comprobante de pago
+                            </p>
+                            {url && !pdf ? (
+                              <button
+                                type="button"
+                                onClick={() => setZoom(url)}
+                                className="w-full"
+                                aria-label="Ampliar comprobante"
+                              >
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img
+                                  src={url}
+                                  alt={`Comprobante de ${c.factura.proveedor}`}
+                                  className="max-h-56 w-full rounded-xl bg-gray-50 object-contain"
+                                />
+                                <span className="mt-1 block text-center text-[10px] text-gray-400">
+                                  Tocá la imagen para ampliar
+                                </span>
+                              </button>
+                            ) : pdf ? (
+                              <p className="rounded-xl bg-gray-50 px-3 py-2 text-xs text-gray-500">
+                                Comprobante en PDF adjunto
+                              </p>
+                            ) : (
+                              <div className="h-32 animate-pulse rounded-xl bg-gray-100" />
+                            )}
+                          </div>
                         ) : null}
 
                         {/* Datos del pago */}
@@ -561,11 +606,20 @@ export function BuscadorComprobantes() {
 
                         {/* Acciones */}
                         <div className="mt-3 flex flex-wrap gap-2">
+                          {c.factura.imagen_url ? (
+                            <button
+                              type="button"
+                              onClick={() => descargar(c.factura.imagen_url)}
+                              className="rounded-xl bg-primary px-3 py-2 text-xs font-semibold text-white active:bg-primary-dark"
+                            >
+                              Descargar factura
+                            </button>
+                          ) : null}
                           {c.imagen_url ? (
                             <button
                               type="button"
-                              onClick={() => descargar(c)}
-                              className="rounded-xl bg-primary px-3 py-2 text-xs font-semibold text-white active:bg-primary-dark"
+                              onClick={() => descargar(c.imagen_url)}
+                              className="rounded-xl bg-secondary px-3 py-2 text-xs font-semibold text-white active:bg-secondary-dark"
                             >
                               Descargar comprobante
                             </button>

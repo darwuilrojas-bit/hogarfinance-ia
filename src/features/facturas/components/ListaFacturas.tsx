@@ -31,6 +31,49 @@ function fechaCorta(fecha: Date): string {
   return `${fecha.getDate()} ${MESES_CORTOS[fecha.getMonth()]}`;
 }
 
+function esPdf(ruta: string): boolean {
+  return ruta.toLowerCase().endsWith(".pdf");
+}
+
+/** Imagen de la factura con zoom al tocar, o aviso de PDF/carga. */
+function ImagenFactura({
+  ruta,
+  url,
+  proveedor,
+  onAmpliar,
+}: {
+  ruta: string;
+  url: string | null;
+  proveedor: string;
+  onAmpliar: (url: string) => void;
+}) {
+  if (esPdf(ruta)) {
+    return (
+      <p className="rounded-xl bg-gray-50 px-3 py-2 text-xs text-gray-500">
+        📄 Factura en PDF adjunta
+      </p>
+    );
+  }
+  if (!url) {
+    return <div className="h-32 animate-pulse rounded-xl bg-gray-100" />;
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => onAmpliar(url)}
+      className="w-full"
+      aria-label="Ampliar factura"
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={url}
+        alt={`Factura de ${proveedor}`}
+        className="max-h-56 w-full rounded-xl bg-gray-50 object-contain"
+      />
+    </button>
+  );
+}
+
 /**
  * Pantalla de Facturas: pendientes ordenadas por urgencia (1er o 2do
  * vencimiento, el que corresponda) y pagadas del mes. Desde acá se
@@ -41,6 +84,8 @@ export function ListaFacturas() {
   const router = useRouter();
   const [facturas, setFacturas] = useState<Factura[] | null>(null);
   const [expandido, setExpandido] = useState<string | null>(null);
+  const [urls, setUrls] = useState<Record<string, string>>({});
+  const [zoom, setZoom] = useState<string | null>(null);
   const [version, setVersion] = useState(0);
 
   useEffect(() => {
@@ -90,6 +135,30 @@ export function ListaFacturas() {
       await supabase.storage.from(BUCKET_COMPROBANTES).remove(rutas);
     }
     setVersion((v) => v + 1);
+  }
+
+  /** Alterna el desplegable y, si hace falta, firma la URL de la imagen. */
+  async function alternar(clave: string, imagenUrl: string | null) {
+    const abrir = expandido !== clave;
+    setExpandido(abrir ? clave : null);
+    if (abrir && imagenUrl && !esPdf(imagenUrl) && !urls[imagenUrl]) {
+      const supabase = createClient();
+      const { data } = await supabase.storage
+        .from(BUCKET_COMPROBANTES)
+        .createSignedUrl(imagenUrl, 3600);
+      if (data?.signedUrl) {
+        setUrls((u) => ({ ...u, [imagenUrl]: data.signedUrl }));
+      }
+    }
+  }
+
+  async function descargarFactura(f: Factura) {
+    if (!f.imagen_url) return;
+    const supabase = createClient();
+    const { data } = await supabase.storage
+      .from(BUCKET_COMPROBANTES)
+      .createSignedUrl(f.imagen_url, 300, { download: true });
+    if (data?.signedUrl) window.open(data.signedUrl, "_blank");
   }
 
   if (facturas === null) {
@@ -162,7 +231,7 @@ export function ListaFacturas() {
                 >
                   <button
                     type="button"
-                    onClick={() => setExpandido(abierto ? null : f.id)}
+                    onClick={() => alternar(f.id, f.imagen_url)}
                     aria-expanded={abierto}
                     className="flex w-full items-center gap-3 p-3 text-left"
                   >
@@ -191,6 +260,16 @@ export function ListaFacturas() {
 
                   {abierto ? (
                     <div className="border-t border-gray-100 px-4 py-3">
+                      {f.imagen_url ? (
+                        <div className="mb-3">
+                          <ImagenFactura
+                            ruta={f.imagen_url}
+                            url={urls[f.imagen_url] ?? null}
+                            proveedor={f.proveedor}
+                            onAmpliar={setZoom}
+                          />
+                        </div>
+                      ) : null}
                       <dl className="mb-3 flex flex-col gap-1.5 text-xs">
                         <div className="flex justify-between">
                           <dt className="text-gray-500">Categoría</dt>
@@ -223,6 +302,15 @@ export function ListaFacturas() {
                         >
                           Registrar pago
                         </button>
+                        {f.imagen_url ? (
+                          <button
+                            type="button"
+                            onClick={() => descargarFactura(f)}
+                            className="rounded-xl bg-secondary-light px-3 py-2 text-xs font-semibold text-secondary active:bg-secondary/20"
+                          >
+                            Descargar factura
+                          </button>
+                        ) : null}
                         <Link
                           href={`/facturas/editar/${f.id}`}
                           className="rounded-xl bg-primary-light px-3 py-2 text-xs font-semibold text-primary active:bg-primary/20"
@@ -296,9 +384,7 @@ export function ListaFacturas() {
                 >
                   <button
                     type="button"
-                    onClick={() =>
-                      setExpandido(abierto ? null : `pagada-${f.id}`)
-                    }
+                    onClick={() => alternar(`pagada-${f.id}`, f.imagen_url)}
                     aria-expanded={abierto}
                     className="flex w-full items-center gap-3 p-3 text-left"
                   >
@@ -322,11 +408,30 @@ export function ListaFacturas() {
 
                   {abierto ? (
                     <div className="border-t border-gray-100 px-4 py-3">
+                      {f.imagen_url ? (
+                        <div className="mb-3">
+                          <ImagenFactura
+                            ruta={f.imagen_url}
+                            url={urls[f.imagen_url] ?? null}
+                            proveedor={f.proveedor}
+                            onAmpliar={setZoom}
+                          />
+                        </div>
+                      ) : null}
                       <p className="mb-3 text-xs text-gray-500">
                         El comprobante de pago se ve y se descarga desde la
                         sección Comprobantes.
                       </p>
                       <div className="flex flex-wrap gap-2">
+                        {f.imagen_url ? (
+                          <button
+                            type="button"
+                            onClick={() => descargarFactura(f)}
+                            className="rounded-xl bg-primary px-3 py-2 text-xs font-semibold text-white active:bg-primary-dark"
+                          >
+                            Descargar factura
+                          </button>
+                        ) : null}
                         <Link
                           href={`/facturas/editar/${f.id}`}
                           className="rounded-xl bg-primary-light px-3 py-2 text-xs font-semibold text-primary active:bg-primary/20"
@@ -349,6 +454,23 @@ export function ListaFacturas() {
           </ul>
         )}
       </section>
+
+      {/* Lightbox: imagen ampliada */}
+      {zoom ? (
+        <button
+          type="button"
+          onClick={() => setZoom(null)}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-2"
+          aria-label="Cerrar imagen ampliada"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={zoom}
+            alt="Factura ampliada"
+            className="max-h-full max-w-full object-contain"
+          />
+        </button>
+      ) : null}
     </div>
   );
 }
