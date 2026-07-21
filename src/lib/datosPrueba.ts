@@ -7,6 +7,14 @@ import type { Categoria } from "@/lib/supabase/types";
 /** Marca que llevan todos los registros generados, para poder borrarlos. */
 export const MARCA_DEMO = "[demo]";
 
+/**
+ * Única cuenta habilitada para generar/eliminar datos de prueba.
+ * Se usa tanto para ocultar el botón en Perfil (DatosPrueba.tsx) como
+ * para bloquear las funciones acá mismo si alguien las llamara desde
+ * la consola del navegador con otra cuenta.
+ */
+export const EMAIL_USUARIO_PRUEBA = "darwuilrojas@yopmail.com";
+
 const PROVEEDORES_DEMO: {
   nombre: string;
   categoria: Categoria;
@@ -66,6 +74,9 @@ export async function generarDatosPrueba(): Promise<string> {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) throw new Error("Sin sesión");
+  if (user.email !== EMAIL_USUARIO_PRUEBA) {
+    throw new Error("Esta herramienta solo está disponible para la cuenta de pruebas.");
+  }
 
   // Evita duplicar si ya se generaron
   const { data: existentes } = await supabase
@@ -249,6 +260,9 @@ export async function eliminarDatosPrueba(): Promise<string> {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) throw new Error("Sin sesión");
+  if (user.email !== EMAIL_USUARIO_PRUEBA) {
+    throw new Error("Esta herramienta solo está disponible para la cuenta de pruebas.");
+  }
 
   // Los comprobantes de facturas demo caen en cascada al borrar la
   // factura, pero por si alguno quedó suelto, se borra explícitamente.

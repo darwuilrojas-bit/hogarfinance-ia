@@ -1,17 +1,38 @@
 "use client";
 
-import { useState } from "react";
-import { eliminarDatosPrueba, generarDatosPrueba } from "@/lib/datosPrueba";
+import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
+import {
+  EMAIL_USUARIO_PRUEBA,
+  eliminarDatosPrueba,
+  generarDatosPrueba,
+} from "@/lib/datosPrueba";
 
 /**
  * Herramienta de testeo: genera o elimina un set completo de datos
- * de prueba (proveedores, 6 meses de gastos y alertas de ejemplo)
- * para el usuario logueado. Todo queda marcado con [demo].
+ * de prueba (proveedores, 6 meses de gastos y alertas de ejemplo).
+ * Solo visible para la cuenta de pruebas (EMAIL_USUARIO_PRUEBA) —
+ * para cualquier otro usuario, actual o nuevo, esta tarjeta no
+ * aparece. Todo lo generado queda marcado con [demo].
  */
 export function DatosPrueba() {
+  const [esCuentaDePrueba, setEsCuentaDePrueba] = useState(false);
   const [ocupado, setOcupado] = useState<"generar" | "eliminar" | null>(null);
   const [mensaje, setMensaje] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelado = false;
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!cancelado) {
+        setEsCuentaDePrueba(user?.email === EMAIL_USUARIO_PRUEBA);
+      }
+    });
+    return () => {
+      cancelado = true;
+    };
+  }, []);
 
   async function ejecutar(accion: "generar" | "eliminar") {
     setOcupado(accion);
@@ -31,6 +52,8 @@ export function DatosPrueba() {
       setOcupado(null);
     }
   }
+
+  if (!esCuentaDePrueba) return null;
 
   return (
     <section className="rounded-2xl border border-dashed border-primary/40 bg-primary-light/30 p-4">
