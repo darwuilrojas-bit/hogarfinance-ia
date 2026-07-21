@@ -1,0 +1,33 @@
+@import "tailwindcss";
+
+@theme {
+  /* Paleta de HogarFinance IA */
+  --color-primary: #1f6feb;
+  --color-primary-dark: #1558c4;
+  --color-primary-light: #eaf1fe;
+  --color-secondary: #0d9276;
+  --color-secondary-dark: #0a755e;
+  --color-secondary-light: #e6f4f0;
+
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: #f3f4f6;
+  color: #111827;
+  font-family: var(--font-sans);
+  /* Sensación de app nativa en el navegador */
+  -webkit-tap-highlight-color: transparent;
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior-y: none;
+}
+
+/* Respeta las zonas seguras de dispositivos con notch */
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
