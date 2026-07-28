@@ -14,6 +14,7 @@ import {
 } from "@/features/alertas/lib/vencimientos";
 
 type Vencimiento = {
+  id: string;
   nombre: string;
   categoria: Categoria;
   fecha: Date;
@@ -34,7 +35,7 @@ export function ProximosVencimientos() {
       const supabase = createClient();
       const { data } = await supabase
         .from("facturas")
-        .select("proveedor, categoria, monto, fecha_vencimiento, fecha_vencimiento_2")
+        .select("id, proveedor, categoria, monto, fecha_vencimiento, fecha_vencimiento_2")
         .eq("estado", "pendiente")
         .not("fecha_vencimiento", "is", null);
       if (cancelado) return;
@@ -48,6 +49,7 @@ export function ProximosVencimientos() {
             hoy
           );
           return {
+            id: f.id,
             nombre: f.proveedor,
             categoria: f.categoria as Categoria,
             fecha,
@@ -97,7 +99,7 @@ export function ProximosVencimientos() {
             const urgencia = urgenciaPorDias(v.dias);
             return (
               <li
-                key={v.nombre}
+                key={v.id}
                 className="flex items-center gap-3 rounded-2xl border border-gray-100 bg-white p-3 shadow-sm"
               >
                 <div
