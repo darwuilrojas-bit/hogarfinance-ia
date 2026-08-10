@@ -68,8 +68,9 @@ generás un reporte de evidencia en PDF en dos toques.**
 
 ## Arquitectura
 
-Los diagramas completos (arquitectura general, flujo de agentes y secuencia UML)
-están en **[docs/arquitectura.md](docs/arquitectura.md)** — GitHub los renderiza
+Los diagramas completos —arquitectura general, flujo de agentes y tres vistas UML
+(casos de uso, secuencia y clases)— están en
+**[docs/arquitectura.md](docs/arquitectura.md)**; GitHub los renderiza
 directamente en el navegador.
 
 En resumen: el frontend móvil-first consulta Supabase directamente (protegido por

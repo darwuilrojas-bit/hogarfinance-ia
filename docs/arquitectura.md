@@ -1,8 +1,9 @@
 # Arquitectura — HogarFinance IA
 
-Tres vistas del sistema: arquitectura general (componentes y flujo de datos),
-flujo de agentes con su ciclo de retroalimentación, y un diagrama UML de
-secuencia de la interacción principal (cargar una factura con OCR).
+Cinco vistas del sistema: arquitectura general (componentes y flujo de datos),
+flujo de agentes con su ciclo de retroalimentación, y tres diagramas UML —
+casos de uso, secuencia de la interacción principal (cargar una factura con
+OCR) y clases del modelo de datos.
 
 ---
 
@@ -111,7 +112,54 @@ iteración.
 
 ---
 
-## 3. UML — Diagrama de secuencia: "Cargar una factura con OCR"
+## 3. UML — Diagrama de casos de uso
+
+Quién hace qué. El usuario del hogar es el actor principal; el agente de IA
+participa **solo** en la extracción automática, que siempre incluye la
+validación humana.
+
+```mermaid
+flowchart LR
+    U(("👤 Usuario<br/>del hogar"))
+    IA(("🧠 Agente IA<br/>(OCR)"))
+
+    subgraph Sistema["HogarFinance IA"]
+        CU1["Registrarse / iniciar sesión /<br/>recuperar contraseña"]
+        CU2["Cargar una factura (foto o PDF)"]
+        CU3["Extraer datos automáticamente<br/>de la factura"]
+        CU4["Validar y corregir<br/>los datos extraídos"]
+        CU5["Consultar facturas pendientes<br/>y vencimientos"]
+        CU6["Registrar el pago y<br/>machearlo con su factura"]
+        CU7["Buscar comprobantes con filtros"]
+        CU8["Generar reporte de<br/>evidencia en PDF"]
+        CU9["Recibir alertas (vencimiento,<br/>anomalía, presupuesto)"]
+        CU10["Ver reportes y análisis de gastos"]
+        CU11["Configurar presupuesto<br/>y preferencias"]
+    end
+
+    U --> CU1
+    U --> CU2
+    U --> CU4
+    U --> CU5
+    U --> CU6
+    U --> CU7
+    U --> CU8
+    U --> CU9
+    U --> CU10
+    U --> CU11
+    CU2 -.->|include| CU3
+    CU3 --> IA
+    CU3 -.->|include| CU4
+    CU6 -.->|include| CU9
+```
+
+No existe ningún camino en el que un dato extraído por la IA llegue a la base
+sin pasar por `CU4` (validación humana): esa es la garantía estructural del
+enfoque *human-in-the-loop*.
+
+---
+
+## 4. UML — Diagrama de secuencia: "Cargar una factura con OCR"
 
 ```mermaid
 sequenceDiagram
@@ -142,3 +190,86 @@ sequenceDiagram
     APP->>DB: Evalúa anomalía y crea alerta si corresponde
     APP-->>U: Redirige a Facturas (queda "Por pagar")
 ```
+
+---
+
+## 5. UML — Diagrama de clases (modelo de datos)
+
+Refleja el esquema real de `supabase/` y los tipos de
+`src/lib/supabase/types.ts`.
+
+```mermaid
+classDiagram
+    class Usuario {
+        +uuid id
+        +string email
+        +string nombre
+        +number presupuesto_mensual
+        +timestamp fecha_creacion
+    }
+    class Factura {
+        +uuid id
+        +uuid usuario_id
+        +string proveedor
+        +Categoria categoria
+        +number monto
+        +int periodo_mes
+        +int periodo_anio
+        +date fecha_vencimiento
+        +date fecha_vencimiento_2
+        +string numero_comprobante
+        +string imagen_url
+        +EstadoFactura estado
+        +vencimientoEfectivo() date
+    }
+    class ComprobantePago {
+        +uuid id
+        +uuid usuario_id
+        +uuid factura_id
+        +number monto
+        +date fecha_pago
+        +string metodo_pago
+        +string numero_operacion
+        +string imagen_url
+    }
+    class Proveedor {
+        +uuid id
+        +uuid usuario_id
+        +string nombre
+        +Categoria categoria
+        +int fecha_vencimiento_habitual
+        +number monto_promedio
+        +int veces_registrado
+    }
+    class Alerta {
+        +uuid id
+        +uuid usuario_id
+        +TipoAlerta tipo
+        +string mensaje
+        +bool leida
+        +date fecha_alerta
+        +prioridad() number
+    }
+    class CorreccionOcr {
+        +uuid id
+        +uuid usuario_id
+        +string texto_original
+        +string texto_corregido
+        +CampoOcr campo
+    }
+
+    Usuario "1" --> "0..*" Factura : carga
+    Usuario "1" --> "0..*" Proveedor : aprende
+    Usuario "1" --> "0..*" Alerta : recibe
+    Usuario "1" --> "0..*" CorreccionOcr : genera
+    Factura "1" --> "0..1" ComprobantePago : se salda con
+    Proveedor "1" ..> "0..*" Factura : normaliza nombre
+    CorreccionOcr ..> Factura : mejora la extracción
+```
+
+La relación central es `Factura "1" → "0..1" ComprobantePago`: una factura
+nace `pendiente` y se salda cuando se le vincula un comprobante. Ese
+**macheo** explícito es lo que hace posible el reporte de evidencia de pago.
+`Proveedor` y `CorreccionOcr` no son entidades del negocio sino la **memoria
+aprendida**: alimentan la extracción futura sin intervenir en el estado de
+las facturas.
