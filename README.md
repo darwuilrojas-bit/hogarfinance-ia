@@ -98,6 +98,17 @@ npm install
    - `OPENAI_API_KEY` (para el OCR; sin ella la app funciona con carga manual)
 3. `npm run dev` y abrir http://localhost:3000
 
+### Tests
+
+```bash
+npm run test:e2e
+```
+
+Tests end-to-end con Playwright sobre un viewport móvil. Cubren las pantallas
+públicas (login, registro, recuperación) y verifican que el proxy de sesión
+mande al login a quien intente abrir una ruta privada sin sesión. Levantan el
+dev server solos; para correrlos contra producción: `BASE_URL=https://… npm run test:e2e`.
+
 ## Estructura del proyecto
 
 ```
