@@ -52,8 +52,9 @@ export function EliminarCuenta() {
     const { error: errorRpc } = await supabase.rpc("eliminar_mi_cuenta");
     if (errorRpc) {
       setEliminando(false);
+      console.error("Error al eliminar la cuenta:", errorRpc);
       return setError(
-        "No se pudo eliminar la cuenta. Verificá que la migración supabase/migracion-perfil.sql esté ejecutada."
+        "No pudimos eliminar tu cuenta. Volvé a intentarlo en unos minutos."
       );
     }
 

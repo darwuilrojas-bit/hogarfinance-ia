@@ -97,9 +97,9 @@ export function ConfigAlertas() {
       .update(cambio)
       .eq("id", user.id);
     if (errorDb) {
-      setError(
-        "No se pudo guardar. Si es la primera vez, ejecutá la migración supabase/migracion-perfil.sql en el SQL Editor."
-      );
+      // El detalle técnico va a la consola; al usuario solo lo accionable.
+      console.error("Error al guardar preferencias de alertas:", errorDb);
+      setError("No pudimos guardar tus preferencias. Intentá de nuevo.");
       return;
     }
     setGuardado(true);

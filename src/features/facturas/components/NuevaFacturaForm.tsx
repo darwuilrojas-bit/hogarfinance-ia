@@ -249,8 +249,9 @@ export function NuevaFacturaForm({ facturaId }: NuevaFacturaFormProps) {
     }
     if (errorFactura) {
       setGuardando(false);
+      console.error("Error al guardar la factura:", errorFactura);
       return setError(
-        "No se pudo guardar la factura. Verificá que hayas ejecutado supabase/migracion-facturas-comprobantes.sql."
+        "No pudimos guardar la factura. Revisá los datos e intentá de nuevo."
       );
     }
 

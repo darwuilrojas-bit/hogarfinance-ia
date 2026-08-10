@@ -351,8 +351,9 @@ export function RegistrarComprobanteForm({
         .single();
       if (errorFactura || !nuevaFactura) {
         setGuardando(false);
+        console.error("Error al crear la factura del pago:", errorFactura);
         return setError(
-          "No se pudo guardar. Verificá que hayas ejecutado supabase/migracion-facturas-comprobantes.sql."
+          "No pudimos guardar el pago. Revisá los datos e intentá de nuevo."
         );
       }
       facturaId = nuevaFactura.id;
@@ -391,8 +392,9 @@ export function RegistrarComprobanteForm({
       .single();
     if (errorComprobante) {
       setGuardando(false);
+      console.error("Error al guardar el comprobante:", errorComprobante);
       return setError(
-        "No se pudo guardar el comprobante. Verificá que hayas ejecutado supabase/migracion-facturas-comprobantes.sql."
+        "No pudimos guardar el comprobante. Revisá los datos e intentá de nuevo."
       );
     }
 
