@@ -288,7 +288,7 @@ export async function POST(request: Request) {
   const [corrRes, provConocidosRes] = await Promise.all([
     supabase
       .from("correcciones_ocr")
-      .select("campo, texto_original, texto_corregido")
+      .select("campo, texto_original, texto_corregido, tipo, proveedor")
       .order("fecha_correccion", { ascending: false })
       .limit(200),
     supabase.from("proveedores").select("nombre, categoria"),
@@ -333,6 +333,25 @@ export async function POST(request: Request) {
       );
       resultado.fecha_pago = corr.texto_corregido;
     }
+  }
+
+  // Señales de campos que este proveedor viene fallando. Dos o más fallas
+  // marcan el campo como problemático: una sola puede ser un mal escaneo.
+  const UMBRAL_CAMPO_PROBLEMATICO = 2;
+  const proveedorLeido = normalizar(resultado.proveedor ?? "");
+  const fallasNumero = correcciones.filter(
+    (c) =>
+      c.tipo === "no_leido" &&
+      c.campo === "numero_comprobante" &&
+      normalizar(c.proveedor ?? "") === proveedorLeido
+  ).length;
+  const numeroEsProblematico =
+    proveedorLeido !== "" && fallasNumero >= UMBRAL_CAMPO_PROBLEMATICO;
+
+  if (numeroEsProblematico) {
+    resultado.aprendizaje.push(
+      `En ${resultado.proveedor} el número de factura suele fallar: revisalo.`
+    );
   }
 
   // 2) Coincidencia difusa con proveedores ya registrados
@@ -413,14 +432,27 @@ export async function POST(request: Request) {
       consVencimiento
     ),
     periodo: puntuar(resultado.periodo !== null, consPeriodo),
-    numero_comprobante: puntuar(
-      resultado.numero_comprobante !== null,
-      resultado.numero_comprobante
-        ? // Los identificadores reales combinan letras y números
-          // (el LSP de AySA, por ejemplo: 0111B15587107).
-          /^[A-Za-z0-9\-./ ]{6,}$/.test(resultado.numero_comprobante)
-        : null
-    ),
+    numero_comprobante: numeroEsProblematico
+      ? // Aunque el formato sea válido, este proveedor viene fallando:
+        // 60 es el puntaje de "revisalo" y pinta el indicador en ámbar.
+        // Math.min preserva el 0 cuando el campo no se leyó.
+        Math.min(
+          60,
+          puntuar(
+            resultado.numero_comprobante !== null,
+            resultado.numero_comprobante
+              ? /^[A-Za-z0-9\-./ ]{6,}$/.test(resultado.numero_comprobante)
+              : null
+          )
+        )
+      : puntuar(
+          resultado.numero_comprobante !== null,
+          resultado.numero_comprobante
+            ? // Los identificadores reales combinan letras y números
+              // (el LSP de AySA, por ejemplo: 0111B15587107).
+              /^[A-Za-z0-9\-./ ]{6,}$/.test(resultado.numero_comprobante)
+            : null
+        ),
     categoria: puntuar(
       resultado.categoria !== null,
       esConocido && resultado.proveedor
