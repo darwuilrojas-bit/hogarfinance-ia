@@ -16,7 +16,15 @@ import { MESES, periodoActual } from "@/lib/formato";
 import { BUCKET_COMPROBANTES, CATEGORIAS } from "@/lib/supabase/types";
 import type { ResultadoOcr } from "@/app/api/ocr/route";
 import { evaluarAnomalia, mensajeAnomalia } from "@/features/alertas/lib/anomalias";
-import { senalesAutomaticas } from "@/features/facturas/lib/senalesOcr";
+import {
+  camposAPreguntar,
+  registroDeRespuesta,
+  senalesAutomaticas,
+  type CampoSenal,
+  type RespuestaUsuario,
+  type SenalPrevia,
+} from "@/features/facturas/lib/senalesOcr";
+import { AvisoCamposVacios } from "@/features/facturas/components/AvisoCamposVacios";
 
 type NuevaFacturaFormProps = {
   /** Si viene un id, el formulario edita esa factura en lugar de crear una. */
@@ -56,6 +64,30 @@ export function NuevaFacturaForm({ facturaId }: NuevaFacturaFormProps) {
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
   const urlPrevia = useRef<string | null>(null);
+
+  // Señales del agente sobre campos que el OCR no completó.
+  const [senalesPrevias, setSenalesPrevias] = useState<SenalPrevia[]>([]);
+  const [camposVacios, setCamposVacios] = useState<CampoSenal[]>([]);
+  const [respondidos, setRespondidos] = useState<
+    Partial<Record<CampoSenal, RespuestaUsuario>>
+  >({});
+
+  useEffect(() => {
+    let cancelado = false;
+    async function cargarSenales() {
+      const supabase = createClient();
+      // RLS ya limita la consulta a las filas del usuario.
+      const { data } = await supabase
+        .from("correcciones_ocr")
+        .select("campo, proveedor, tipo")
+        .eq("tipo", "ausente");
+      if (!cancelado && data) setSenalesPrevias(data);
+    }
+    cargarSenales();
+    return () => {
+      cancelado = true;
+    };
+  }, []);
 
   useEffect(
     () => () => {
@@ -208,6 +240,27 @@ export function NuevaFacturaForm({ facturaId }: NuevaFacturaFormProps) {
     if (!fechaVencimiento)
       return setError("Ingresá al menos el primer vencimiento.");
     if (!categoria) return setError("Elegí una categoría.");
+
+    // Primer intento: si hay campos que el OCR no completó, avisar una vez.
+    // No bloquea — el segundo toque guarda igual, se haya respondido o no.
+    const aPreguntar = camposAPreguntar(
+      ocr
+        ? {
+            numero_comprobante: ocr.numero_comprobante,
+            fecha_vencimiento_2: ocr.fecha_vencimiento_2,
+          }
+        : null,
+      {
+        numero_comprobante: numeroFactura,
+        fecha_vencimiento_2: fechaVencimiento2,
+      },
+      senalesPrevias,
+      proveedor
+    );
+    if (aPreguntar.length > 0 && camposVacios.length === 0) {
+      setCamposVacios(aPreguntar);
+      return;
+    }
 
     setGuardando(true);
     const supabase = createClient();
@@ -365,7 +418,13 @@ export function NuevaFacturaForm({ facturaId }: NuevaFacturaFormProps) {
         user.id
       );
 
-      const filas = [...correcciones, ...automaticas];
+      const respuestas = (
+        Object.entries(respondidos) as [CampoSenal, RespuestaUsuario][]
+      ).map(([campo, respuesta]) =>
+        registroDeRespuesta(campo, respuesta, proveedor, user.id)
+      );
+
+      const filas = [...correcciones, ...automaticas, ...respuestas];
       if (filas.length > 0) {
         // Si falla, la factura ya se guardó: la señal es secundaria.
         const { error: errorSenal } = await supabase
@@ -565,8 +624,20 @@ export function NuevaFacturaForm({ facturaId }: NuevaFacturaFormProps) {
         </p>
       ) : null}
 
+      <AvisoCamposVacios
+        campos={camposVacios}
+        respondidos={respondidos}
+        onResponder={(campo, respuesta) =>
+          setRespondidos((r) => ({ ...r, [campo]: respuesta }))
+        }
+      />
+
       <Button type="submit" loading={guardando} disabled={procesando !== null}>
-        {editando ? "Guardar cambios" : "Guardar factura"}
+        {camposVacios.length > 0
+          ? "Guardar igual"
+          : editando
+            ? "Guardar cambios"
+            : "Guardar factura"}
       </Button>
     </form>
   );
