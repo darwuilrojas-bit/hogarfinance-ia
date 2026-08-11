@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { BUCKET_COMPROBANTES } from "@/lib/supabase/types";
+import { textoComprobante } from "./campos";
 
 const PROMPT_OCR = `Analizá esta imagen de una factura o comprobante de pago de un servicio del hogar (Argentina). Extraé y devolvé SOLO un JSON con estos campos:
 - proveedor (string)
@@ -253,10 +254,7 @@ export async function POST(request: Request) {
       /^\d{1,2}\/\d{4}$/.test(crudo.periodo)
         ? crudo.periodo
         : null,
-    numero_comprobante:
-      typeof crudo.numero_comprobante === "string" && crudo.numero_comprobante
-        ? crudo.numero_comprobante
-        : null,
+    numero_comprobante: textoComprobante(crudo.numero_comprobante),
     categoria: CATEGORIAS_VALIDAS.includes(categoria) ? categoria : null,
     aprendizaje: [],
     confianza: {

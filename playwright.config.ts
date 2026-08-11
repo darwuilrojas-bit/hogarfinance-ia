@@ -8,8 +8,10 @@ import { defineConfig, devices } from "@playwright/test";
  * registrar pago) no se automatizan acá: necesitan credenciales de un
  * usuario de prueba, que no se versionan en el repositorio.
  */
+// Los tests unitarios son de lógica pura: no levantan el dev server.
+const soloUnitarios = process.argv.includes("--project=unit");
+
 export default defineConfig({
-  testDir: "./e2e",
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
@@ -21,14 +23,21 @@ export default defineConfig({
   },
   projects: [
     {
+      // Tests unitarios de lógica pura: no necesitan navegador.
+      name: "unit",
+      testDir: "./tests/unit",
+    },
+    {
       // La app es móvil-first: se prueba con un viewport de celular.
       name: "mobile-chrome",
+      testDir: "./e2e",
       use: { ...devices["Pixel 7"] },
     },
   ],
-  webServer: process.env.BASE_URL
-    ? undefined
-    : {
+  webServer:
+    soloUnitarios || process.env.BASE_URL
+      ? undefined
+      : {
         command: "npm run dev",
         url: "http://localhost:3000/login",
         reuseExistingServer: !process.env.CI,
