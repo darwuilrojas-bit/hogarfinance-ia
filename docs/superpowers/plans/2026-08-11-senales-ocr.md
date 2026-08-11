@@ -1,5 +1,13 @@
 # Señales del agente de aprendizaje — Plan de implementación
 
+> **Estado (2026-08-11):** las 5 tareas están implementadas, commiteadas y
+> desplegadas. 30/30 tests pasan (14 unitarios + 16 e2e), y los 16 e2e también
+> pasan contra producción.
+>
+> **Pendiente:** las verificaciones en la app con sesión iniciada —Task 3
+> Step 4, Task 4 Step 7 y Task 5 Step 5— que requieren estar logueado y no
+> se pueden automatizar sin versionar credenciales.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Que la app registre cuándo el OCR no completó un campo, distinga si la factura no lo trae o si el agente falló, y use esa señal para dejar de preguntar lo que es normal y anticipar los campos problemáticos.
