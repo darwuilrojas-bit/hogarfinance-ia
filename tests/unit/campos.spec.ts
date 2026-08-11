@@ -17,6 +17,18 @@ test("acepta el numero de comprobante cuando llega como texto", () => {
   expect(textoComprobante("  12345678  ")).toBe("12345678");
 });
 
+test("acepta identificadores con letras, como el LSP de AySA", () => {
+  expect(textoComprobante("0111B15587107")).toBe("0111B15587107");
+});
+
+test("descarta la etiqueta del campo cuando el modelo la devuelve en lugar del valor", () => {
+  // Caso real: el modelo devolvió "LSP" (el rótulo) en vez del número.
+  // Un identificador de factura siempre tiene al menos un dígito.
+  expect(textoComprobante("LSP")).toBeNull();
+  expect(textoComprobante("N° de factura")).toBeNull();
+  expect(textoComprobante("Nro. de liquidación")).toBeNull();
+});
+
 test("descarta valores que no sirven", () => {
   expect(textoComprobante(null)).toBeNull();
   expect(textoComprobante(undefined)).toBeNull();

@@ -10,7 +10,7 @@ const PROMPT_OCR = `Analizá esta imagen de una factura o comprobante de pago de
 - fecha_vencimiento_2 (el SEGUNDO vencimiento si la factura lo tiene, formato DD/MM/YYYY; si no, null)
 - fecha_pago (IMPORTANTE: SOLO si el documento es un comprobante, ticket o constancia DE PAGO, la fecha en que se realizó el pago, formato DD/MM/YYYY. Si el documento es una factura sin constancia de pago, devolvé null — NUNCA uses el vencimiento como fecha de pago)
 - periodo (período facturado, formato MM/YYYY)
-- numero_comprobante (el identificador del comprobante o factura en sí: suele figurar como "N° de comprobante", "N° de factura", "Nro. de liquidación" o, en facturas de AySA, el número rotulado "LSP". NO uses el número de cuenta, número de cliente, número de socio, referencia de pago electrónico ni códigos de barras)
+- numero_comprobante (el VALOR del identificador, NUNCA el rótulo que lo precede. El rótulo suele ser "N° de comprobante", "N° de factura", "Nro. de liquidación" o, en facturas de AySA, "LSP"; lo que necesito es el código que figura AL LADO de ese rótulo. Ejemplo: si la factura dice «LSP    0111B15587107», devolvé "0111B15587107" y NO "LSP". Puede contener letras y números. Devolvelo como texto entre comillas. NO uses el número de cuenta, número de cliente, número de socio, referencia de pago electrónico ni códigos de barras)
 - categoria (una de: electricidad/agua/gas/internet/alquiler/expensas/otro)
 Si no podés determinar algún campo, devolvé null para ese campo.`;
 
@@ -403,7 +403,9 @@ export async function POST(request: Request) {
     numero_comprobante: puntuar(
       resultado.numero_comprobante !== null,
       resultado.numero_comprobante
-        ? /^[\d\-./ ]{6,}$/.test(resultado.numero_comprobante)
+        ? // Los identificadores reales combinan letras y números
+          // (el LSP de AySA, por ejemplo: 0111B15587107).
+          /^[A-Za-z0-9\-./ ]{6,}$/.test(resultado.numero_comprobante)
         : null
     ),
     categoria: puntuar(

@@ -10,15 +10,25 @@
 
 /**
  * Convierte a texto el identificador de un comprobante, venga como string
- * o como número. Devuelve null si no hay un valor utilizable.
+ * o como número.
+ *
+ * Rechaza los valores sin ningún dígito: todo identificador de factura los
+ * tiene, así que un valor puramente alfabético significa que el modelo
+ * devolvió la etiqueta del campo ("LSP", "N° de factura") en lugar de su
+ * valor. Es preferible dejarlo vacío, que el usuario ve y completa, antes
+ * que guardar una etiqueta como si fuera el número.
  */
 export function textoComprobante(v: unknown): string | null {
+  let texto: string;
   if (typeof v === "number") {
-    return Number.isFinite(v) ? String(v) : null;
+    if (!Number.isFinite(v)) return null;
+    texto = String(v);
+  } else if (typeof v === "string") {
+    texto = v.trim();
+  } else {
+    return null;
   }
-  if (typeof v === "string") {
-    const limpio = v.trim();
-    return limpio ? limpio : null;
-  }
-  return null;
+  if (!texto) return null;
+  if (!/\d/.test(texto)) return null;
+  return texto;
 }
