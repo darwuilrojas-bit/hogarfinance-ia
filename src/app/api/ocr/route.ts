@@ -3,16 +3,29 @@ import { createClient } from "@/lib/supabase/server";
 import { BUCKET_COMPROBANTES } from "@/lib/supabase/types";
 import { textoComprobante } from "./campos";
 
-const PROMPT_OCR = `Analizá esta imagen de una factura o comprobante de pago de un servicio del hogar (Argentina). Extraé y devolvé SOLO un JSON con estos campos:
-- proveedor (string)
-- monto (el importe EXACTO con sus decimales, sin redondear. Devolvelo como número con punto decimal: si la factura dice $45.123,45 devolvé 45123.45; si dice $45.123 devolvé 45123. Si la factura tiene dos vencimientos con montos distintos, usá el monto del primer vencimiento)
-- fecha_vencimiento (el PRIMER vencimiento de la factura, formato DD/MM/YYYY)
-- fecha_vencimiento_2 (el SEGUNDO vencimiento si la factura lo tiene, formato DD/MM/YYYY; si no, null)
-- fecha_pago (IMPORTANTE: SOLO si el documento es un comprobante, ticket o constancia DE PAGO, la fecha en que se realizó el pago, formato DD/MM/YYYY. Si el documento es una factura sin constancia de pago, devolvé null — NUNCA uses el vencimiento como fecha de pago)
-- periodo (período facturado, formato MM/YYYY)
-- numero_comprobante (el VALOR del identificador, NUNCA el rótulo que lo precede. El rótulo suele ser "N° de comprobante", "N° de factura", "Nro. de liquidación" o, en facturas de AySA, "LSP"; lo que necesito es el código que figura AL LADO de ese rótulo. Ejemplo: si la factura dice «LSP    0111B15587107», devolvé "0111B15587107" y NO "LSP". Puede contener letras y números. Devolvelo como texto entre comillas. NO uses el número de cuenta, número de cliente, número de socio, referencia de pago electrónico ni códigos de barras)
-- categoria (una de: electricidad/agua/gas/internet/alquiler/expensas/otro)
-Si no podés determinar algún campo, devolvé null para ese campo.`;
+const PROMPT_OCR = `Sos un extractor de datos de facturas y comprobantes de servicios del hogar de Argentina (luz, agua, gas, internet, telefonía, alquiler, expensas).
+
+REGLA CRÍTICA — VALOR, NO RÓTULO: extraé el dato que figura JUNTO a cada etiqueta impresa, nunca la etiqueta misma. Ejemplo real: si la factura muestra «LSP    0111B15587107», el valor correcto es "0111B15587107". Devolver "LSP" es un error.
+
+REGLA CRÍTICA — NO INVENTES: si un dato no está visible o no estás seguro, devolvé null para ese campo. Nunca deduzcas ni completes por contexto.
+
+Devolvé ÚNICAMENTE un objeto JSON, sin texto previo ni posterior y sin bloque de código, con exactamente estas claves:
+
+- "proveedor": nombre de la empresa emisora, como texto.
+
+- "monto": importe a pagar, como número con punto decimal y sin símbolo. Convertí el formato argentino: "$45.123,45" → 45123.45; "$45.123" → 45123. Si hay dos vencimientos con importes distintos, usá el del PRIMER vencimiento.
+
+- "fecha_vencimiento": PRIMER vencimiento, formato "DD/MM/YYYY".
+
+- "fecha_vencimiento_2": SEGUNDO vencimiento (el que tiene recargo) si la factura lo muestra; si no existe, null.
+
+- "fecha_pago": SOLO si el documento es un comprobante, ticket o constancia DE PAGO ya realizado, la fecha en que se pagó, formato "DD/MM/YYYY". Si es una factura sin constancia de pago, null. NUNCA uses un vencimiento como fecha de pago.
+
+- "periodo": período facturado, formato "MM/YYYY".
+
+- "numero_comprobante": identificador de ESTE documento, siempre como cadena de texto entre comillas (aunque sean solo dígitos). Suele figurar junto a rótulos como "N° de comprobante", "N° de factura", "Nro. de liquidación" o, en AySA, "LSP". Puede combinar letras y números. NO devuelvas ninguno de estos: número de cuenta, número de cliente, número de socio, cuenta de servicios, referencia de pago electrónico (Pago Fácil, Rapipago, Link, Banelco), CUIT, ni dígitos leídos de un código de barras.
+
+- "categoria": exactamente uno de estos valores: "electricidad", "agua", "gas", "internet", "alquiler", "expensas", "otro".`;
 
 const CATEGORIAS_VALIDAS = [
   "electricidad",
