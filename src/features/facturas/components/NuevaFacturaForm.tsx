@@ -16,6 +16,7 @@ import { MESES, periodoActual } from "@/lib/formato";
 import { BUCKET_COMPROBANTES, CATEGORIAS } from "@/lib/supabase/types";
 import type { ResultadoOcr } from "@/app/api/ocr/route";
 import { evaluarAnomalia, mensajeAnomalia } from "@/features/alertas/lib/anomalias";
+import { senalesAutomaticas } from "@/features/facturas/lib/senalesOcr";
 
 type NuevaFacturaFormProps = {
   /** Si viene un id, el formulario edita esa factura en lugar de crear una. */
@@ -349,8 +350,30 @@ export function NuevaFacturaForm({ facturaId }: NuevaFacturaFormProps) {
           texto_corregido: String(montoNum),
         });
       }
-      if (correcciones.length > 0) {
-        await supabase.from("correcciones_ocr").insert(correcciones);
+      // El OCR no leyó el campo y el usuario lo completó a mano: esa es la
+      // evidencia de que el agente falló. Se registra sin preguntar.
+      const automaticas = senalesAutomaticas(
+        {
+          numero_comprobante: ocr.numero_comprobante,
+          fecha_vencimiento_2: ocr.fecha_vencimiento_2,
+        },
+        {
+          numero_comprobante: numeroFactura,
+          fecha_vencimiento_2: fechaVencimiento2,
+        },
+        proveedor,
+        user.id
+      );
+
+      const filas = [...correcciones, ...automaticas];
+      if (filas.length > 0) {
+        // Si falla, la factura ya se guardó: la señal es secundaria.
+        const { error: errorSenal } = await supabase
+          .from("correcciones_ocr")
+          .insert(filas);
+        if (errorSenal) {
+          console.error("No se pudieron registrar las señales:", errorSenal);
+        }
       }
     }
 
