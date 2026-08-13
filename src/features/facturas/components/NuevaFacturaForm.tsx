@@ -257,6 +257,20 @@ export function NuevaFacturaForm({ facturaId }: NuevaFacturaFormProps) {
       senalesPrevias,
       proveedor
     );
+    // DIAGNÓSTICO TEMPORAL: el aviso no aparecía en producción y por lectura
+    // del código no se veía por qué. Quitar una vez identificada la causa.
+    console.log("[senales] decisión del aviso", {
+      ocrCorrio: ocr !== null,
+      ocr_numero: ocr?.numero_comprobante,
+      ocr_venc2: ocr?.fecha_vencimiento_2,
+      campo_numero: numeroFactura,
+      campo_venc2: fechaVencimiento2,
+      proveedor,
+      senalesPrevias,
+      aPreguntar,
+      camposVaciosActual: camposVacios,
+    });
+
     if (aPreguntar.length > 0 && camposVacios.length === 0) {
       setCamposVacios(aPreguntar);
       return;
