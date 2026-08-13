@@ -7,14 +7,35 @@ import { rotuloEsDeFactura, textoComprobante } from "@/app/api/ocr/campos";
  * aceptaba string, lo descartaba en silencio.
  */
 
-test("acepta el numero de comprobante cuando llega como numero JSON", () => {
-  // El caso de AySA: el LSP es puramente numérico.
-  expect(textoComprobante(123456789)).toBe("123456789");
+test("acepta los identificadores reales de las tres facturas del banco", () => {
+  expect(textoComprobante("0111B15587107")).toBe("0111B15587107"); // AySA
+  expect(textoComprobante("B-0064-43054306")).toBe("B-0064-43054306"); // MetroGas
+  expect(textoComprobante("B 0501-84370495 18")).toBe("B 0501-84370495 18"); // Edesur
+  expect(textoComprobante("  0001-A00123456  ")).toBe("0001-A00123456");
 });
 
-test("acepta el numero de comprobante cuando llega como texto", () => {
-  expect(textoComprobante("0001-00123456")).toBe("0001-00123456");
-  expect(textoComprobante("  12345678  ")).toBe("12345678");
+test("descarta los numeros puramente numericos", () => {
+  // Caso real de MetroGas: el modelo no puede leer el identificador (impreso
+  // en gris claro) y devuelve el número del código de barras, que es puro
+  // dígito. Las liquidaciones de servicios públicos llevan la clase de
+  // comprobante (A/B/C), así que un valor sin letras no es el número.
+  expect(textoComprobante("250009229205")).toBeNull();
+  expect(textoComprobante("30010937466")).toBeNull(); // número de cliente
+  expect(textoComprobante(123456789)).toBeNull();
+});
+
+test("saca el rotulo cuando el modelo lo antepone al valor", () => {
+  expect(textoComprobante("LSP B-0064-43054306")).toBe("B-0064-43054306");
+  expect(textoComprobante("N° 0001-A00123456")).toBe("0001-A00123456");
+  expect(textoComprobante("Nro. B 0501-84370495 18")).toBe("B 0501-84370495 18");
+});
+
+test("descarta la lectura de Edesur a la que el modelo le perdio la clase", () => {
+  // Caso real: el valor impreso es "B 0501-84370495 18" y el modelo devuelve
+  // "LSP 8501-84370495 18" — cambió la B por el rótulo y leyó 8501 en lugar
+  // de 0501. Sin la letra de clase no hay identificador válido: null, y el
+  // usuario lo completa.
+  expect(textoComprobante("LSP 8501-84370495 18")).toBeNull();
 });
 
 test("acepta identificadores con letras, como el LSP de AySA", () => {

@@ -18,7 +18,9 @@ Atención al contraste: en varias facturas (MetroGas, por ejemplo) ese rótulo y
 
 Cómo reconocer el número del código de barras para descartarlo: está pegado a las barras verticales (arriba o abajo), suele tener 12 o más dígitos y NO contiene letras ni guiones. NUNCA lo devuelvas, aunque sea el número más grande y legible de la zona.
 
-Si NO encontrás el rótulo, o no podés leer su valor con claridad, devolvé null. Es correcto devolver null; lo que está prohibido es reemplazarlo por otro número de la factura.
+Verificación obligatoria: este número suele estar impreso DOS veces, en el encabezado y en el talón de pago al pie de la hoja. Buscá las dos apariciones y compará dígito por dígito. Si coinciden, devolvé ese valor. Si no coinciden, o si solo encontrás una y no la leés con total nitidez, devolvé null.
+
+Si NO encontrás el rótulo, o no podés leer su valor con claridad, devolvé null. Es correcto devolver null; lo que está prohibido es reemplazarlo por otro número de la factura. Devolvé solo el código, sin el rótulo adelante: "B 0501-84370495 18", nunca "LSP B 0501-84370495 18".
 
 Devolvé ÚNICAMENTE un objeto JSON, sin texto previo ni posterior y sin bloque de código, con exactamente estas claves:
 

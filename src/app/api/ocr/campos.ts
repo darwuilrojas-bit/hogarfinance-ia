@@ -69,7 +69,34 @@ export function textoComprobante(v: unknown): string | null {
   } else {
     return null;
   }
+
+  // El modelo a veces antepone el rótulo al valor ("LSP 8501-84370495 18").
+  texto = texto
+    .replace(
+      // El orden importa: las alternativas más largas van primero, si no
+      // "n[°ºo]?" se come solo la N de "Nro." y deja "ro." pegado al valor.
+      /^\s*(liquidaci[oó]n(es)? de servicios p[uú]blicos|n[uú]mero|nro\.?|lsp|n[°ºo]|de)\s*[:.\-–]?\s*/i,
+      ""
+    )
+    .trim();
+
   if (!texto) return null;
+
+  // Un identificador de factura tiene dígitos. Un valor puramente alfabético
+  // significa que el modelo devolvió el rótulo en vez del valor.
   if (!/\d/.test(texto)) return null;
+
+  // Y tiene al menos una letra: es la clase de comprobante (A/B/C) que llevan
+  // las liquidaciones de servicios públicos argentinas. Las tres facturas
+  // reales del banco de pruebas la tienen (0111B15587107, B-0064-43054306,
+  // B 0501-84370495 18), mientras que los números que el modelo confunde con
+  // el identificador —código de barras, número de cliente, CUIT, código de
+  // pago electrónico— son siempre puramente numéricos.
+  //
+  // El intercambio es deliberado: ante la duda preferimos dejar el campo
+  // vacío, que el usuario ve y completa, antes que guardar el número
+  // equivocado sin que nadie se entere.
+  if (!/[A-Za-z]/.test(texto)) return null;
+
   return texto;
 }
