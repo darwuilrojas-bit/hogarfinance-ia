@@ -17,6 +17,10 @@
 /blob-report
 /playwright/.cache
 
+# Facturas reales para el banco de pruebas del OCR: datos personales,
+# nunca se versionan.
+/pruebas-ocr
+
 # next.js
 /.next/
 /out/

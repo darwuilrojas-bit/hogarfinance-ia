@@ -104,10 +104,22 @@ npm install
 npm run test:e2e
 ```
 
-Tests end-to-end con Playwright sobre un viewport móvil. Cubren las pantallas
-públicas (login, registro, recuperación) y verifican que el proxy de sesión
-mande al login a quien intente abrir una ruta privada sin sesión. Levantan el
-dev server solos; para correrlos contra producción: `BASE_URL=https://… npm run test:e2e`.
+Tests end-to-end con Playwright sobre un viewport móvil, más los unitarios de
+lógica pura. Cubren las pantallas públicas (login, registro, recuperación) y
+verifican que el proxy de sesión mande al login a quien intente abrir una ruta
+privada sin sesión. Levantan el dev server solos; para correrlos contra
+producción: `BASE_URL=https://… npm run test:e2e`.
+
+```bash
+npm run test:ocr
+```
+
+Banco de pruebas del **prompt de extracción** contra facturas reales: es lo
+único que ejercita el OCR de verdad, porque el lint, el build y los unitarios
+no prueban nada del prompt. Es opt-in porque consume tokens y necesita
+imágenes con datos personales, que no se versionan: guardalas en `pruebas-ocr/`
+(ignorada por git) junto a un `esperado.json` que describa qué debería extraer
+de cada una. El encabezado de `tests/ocr/extraccion.spec.ts` tiene el formato.
 
 ## Estructura del proyecto
 
