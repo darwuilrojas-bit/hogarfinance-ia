@@ -258,8 +258,10 @@ export function NuevaFacturaForm({ facturaId }: NuevaFacturaFormProps) {
       proveedor
     );
     // DIAGNÓSTICO TEMPORAL: el aviso no aparecía en producción y por lectura
-    // del código no se veía por qué. Quitar una vez identificada la causa.
-    console.log("[senales] decisión del aviso", {
+    // del código no se veía por qué. Se guarda además en sessionStorage
+    // porque al guardar la app navega y el navegador limpia la consola.
+    // Quitar una vez identificada la causa.
+    const diagnostico = {
       ocrCorrio: ocr !== null,
       ocr_numero: ocr?.numero_comprobante,
       ocr_venc2: ocr?.fecha_vencimiento_2,
@@ -269,7 +271,13 @@ export function NuevaFacturaForm({ facturaId }: NuevaFacturaFormProps) {
       senalesPrevias,
       aPreguntar,
       camposVaciosActual: camposVacios,
-    });
+    };
+    console.log("[senales] decisión del aviso", diagnostico);
+    try {
+      sessionStorage.setItem("senales-debug", JSON.stringify(diagnostico));
+    } catch {
+      // sessionStorage puede fallar en modo privado: el console.log alcanza.
+    }
 
     if (aPreguntar.length > 0 && camposVacios.length === 0) {
       setCamposVacios(aPreguntar);
