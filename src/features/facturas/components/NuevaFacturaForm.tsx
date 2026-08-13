@@ -654,6 +654,40 @@ export function NuevaFacturaForm({ facturaId }: NuevaFacturaFormProps) {
         }
       />
 
+      {/* DIAGNÓSTICO TEMPORAL en pantalla: el aviso no se dispara y hace
+          falta ver qué decide en la sesión real. Quitar al resolverlo. */}
+      {ocrListo ? (
+        <pre className="overflow-x-auto rounded-xl bg-gray-900 px-3 py-3 text-[10px] leading-relaxed text-green-300">
+          {JSON.stringify(
+            {
+              ocr_numero: ocr?.numero_comprobante,
+              ocr_venc2: ocr?.fecha_vencimiento_2,
+              campo_numero: numeroFactura,
+              campo_venc2: fechaVencimiento2,
+              proveedor,
+              senalesPrevias,
+              aPreguntarAhora: camposAPreguntar(
+                ocr
+                  ? {
+                      numero_comprobante: ocr.numero_comprobante,
+                      fecha_vencimiento_2: ocr.fecha_vencimiento_2,
+                    }
+                  : null,
+                {
+                  numero_comprobante: numeroFactura,
+                  fecha_vencimiento_2: fechaVencimiento2,
+                },
+                senalesPrevias,
+                proveedor
+              ),
+              camposVacios,
+            },
+            null,
+            1
+          )}
+        </pre>
+      ) : null}
+
       <Button type="submit" loading={guardando} disabled={procesando !== null}>
         {camposVacios.length > 0
           ? "Guardar igual"
