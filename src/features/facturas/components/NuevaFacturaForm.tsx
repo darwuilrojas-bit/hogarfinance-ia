@@ -67,7 +67,6 @@ export function NuevaFacturaForm({ facturaId }: NuevaFacturaFormProps) {
 
   // Señales del agente sobre campos que el OCR no completó.
   const [senalesPrevias, setSenalesPrevias] = useState<SenalPrevia[]>([]);
-  const [camposVacios, setCamposVacios] = useState<CampoSenal[]>([]);
   const [respondidos, setRespondidos] = useState<
     Partial<Record<CampoSenal, RespuestaUsuario>>
   >({});
@@ -241,27 +240,6 @@ export function NuevaFacturaForm({ facturaId }: NuevaFacturaFormProps) {
       return setError("Ingresá al menos el primer vencimiento.");
     if (!categoria) return setError("Elegí una categoría.");
 
-    // Primer intento: si hay campos que el OCR no completó, avisar una vez.
-    // No bloquea — el segundo toque guarda igual, se haya respondido o no.
-    const aPreguntar = camposAPreguntar(
-      ocr
-        ? {
-            numero_comprobante: ocr.numero_comprobante,
-            fecha_vencimiento_2: ocr.fecha_vencimiento_2,
-          }
-        : null,
-      {
-        numero_comprobante: numeroFactura,
-        fecha_vencimiento_2: fechaVencimiento2,
-      },
-      senalesPrevias,
-      proveedor
-    );
-    if (aPreguntar.length > 0 && camposVacios.length === 0) {
-      setCamposVacios(aPreguntar);
-      return;
-    }
-
     setGuardando(true);
     const supabase = createClient();
     const {
@@ -418,11 +396,20 @@ export function NuevaFacturaForm({ facturaId }: NuevaFacturaFormProps) {
         user.id
       );
 
+      // Solo las respuestas de campos que siguen vacíos: si el usuario
+      // respondió y después lo completó a mano, esa carga manual ya quedó
+      // registrada por senalesAutomaticas y la respuesta sobra.
+      const valoresFinales = {
+        numero_comprobante: numeroFactura,
+        fecha_vencimiento_2: fechaVencimiento2,
+      };
       const respuestas = (
         Object.entries(respondidos) as [CampoSenal, RespuestaUsuario][]
-      ).map(([campo, respuesta]) =>
-        registroDeRespuesta(campo, respuesta, proveedor, user.id)
-      );
+      )
+        .filter(([campo]) => valoresFinales[campo].trim() === "")
+        .map(([campo, respuesta]) =>
+          registroDeRespuesta(campo, respuesta, proveedor, user.id)
+        );
 
       const filas = [...correcciones, ...automaticas, ...respuestas];
       if (filas.length > 0) {
@@ -441,6 +428,24 @@ export function NuevaFacturaForm({ facturaId }: NuevaFacturaFormProps) {
   }
 
   const ocrListo = ocr !== null;
+
+  // Campos que el OCR no pudo completar y siguen vacíos. Se calcula en cada
+  // render: el aviso aparece apenas termina la lectura y desaparece solo si
+  // el usuario escribe el dato a mano.
+  const camposVacios = camposAPreguntar(
+    ocr
+      ? {
+          numero_comprobante: ocr.numero_comprobante,
+          fecha_vencimiento_2: ocr.fecha_vencimiento_2,
+        }
+      : null,
+    {
+      numero_comprobante: numeroFactura,
+      fecha_vencimiento_2: fechaVencimiento2,
+    },
+    senalesPrevias,
+    proveedor
+  );
 
   return (
     <form onSubmit={guardar} className="flex flex-col gap-4 px-5 py-5">
@@ -633,11 +638,7 @@ export function NuevaFacturaForm({ facturaId }: NuevaFacturaFormProps) {
       />
 
       <Button type="submit" loading={guardando} disabled={procesando !== null}>
-        {camposVacios.length > 0
-          ? "Guardar igual"
-          : editando
-            ? "Guardar cambios"
-            : "Guardar factura"}
+        {editando ? "Guardar cambios" : "Guardar factura"}
       </Button>
     </form>
   );

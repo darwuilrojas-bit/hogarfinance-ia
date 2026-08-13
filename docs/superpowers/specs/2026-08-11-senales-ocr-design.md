@@ -96,8 +96,11 @@ evidencia. Se registra `no_leido` con lo que escribió, en silencio y sin
 preguntar nada. Es la señal más valiosa y la que menos molesta.
 
 **Caso B — el campo quedó vacío.** Ahí sí hace falta preguntar, porque la app
-no puede saber si falta en la factura o si el agente falló. Al tocar
-**Guardar factura** aparece un aviso sobre el botón:
+no puede saber si falta en la factura o si el agente falló. El aviso aparece
+**apenas termina la lectura**, mientras el usuario revisa los datos, y no al
+guardar: que el botón «Guardar factura» no guarde se lee como un error de la
+app. Si el usuario escribe el dato a mano, el aviso desaparece solo y el caso
+pasa a ser el A.
 
 ```
 El número de factura quedó vacío.
@@ -106,12 +109,10 @@ El número de factura quedó vacío.
 [ La factura no lo trae ]   [ No se pudo leer ]
 ```
 
-El botón principal pasa a decir **Guardar igual**.
-
 Reglas:
 
-- **No bloquea.** El usuario puede guardar responda o no. Responder es
-  opcional y toma un toque.
+- **No bloquea.** El botón guarda siempre, se haya respondido o no.
+  Responder es opcional y toma un toque.
 - Elegir *"La factura no lo trae"* registra `ausente`.
 - Elegir *"No se pudo leer"* registra `no_leido`.
 - El aviso aparece solo si el OCR corrió. Si el usuario cargó la factura a
