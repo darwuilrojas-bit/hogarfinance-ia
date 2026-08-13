@@ -11,16 +11,20 @@ REGLA CRÍTICA — VALOR, NO RÓTULO: extraé el dato que figura JUNTO a cada et
 
 REGLA CRÍTICA — NO INVENTES: si un dato no está visible o no estás seguro, devolvé null para ese campo. Nunca deduzcas ni completes por contexto.
 
-REGLA CRÍTICA — CUÁL ES EL NÚMERO DE FACTURA: es el identificador rotulado "LIQUIDACIÓN DE SERVICIOS PÚBLICOS" (o su sigla "LSP"), "N° de comprobante", "N° de factura" o "Nro. de liquidación". Suele estar en el ángulo SUPERIOR IZQUIERDO, en letra chica. Ejemplos reales:
+REGLA CRÍTICA — CUÁL ES EL NÚMERO DE FACTURA: es el valor que acompaña al rótulo "LIQUIDACIÓN DE SERVICIOS PÚBLICOS", su sigla "LSP", "N° de comprobante", "N° de factura" o "Nro. de liquidación". Puede estar en cualquier margen superior de la hoja y a veces en letra muy chica o de bajo contraste. Ejemplos reales:
   · «LIQUIDACIÓN DE SERVICIOS PÚBLICOS / B-0064-43054306» → devolvé "B-0064-43054306"
-  · «LSP    0111B15587107» → devolvé "0111B15587107"
-NUNCA devuelvas como número de factura el número largo que aparece impreso arriba, abajo o al lado de un código de barras, aunque esté escrito como texto normal y aunque sea el número más visible de la zona. Ese número es de uso interno del cobro, no identifica la factura.
+  · «LSP - LIQUIDACIÓN DE SERVICIOS PÚBLICOS B18 N° 0111B15587107» → devolvé "0111B15587107"
+Atención al contraste: en varias facturas (MetroGas, por ejemplo) ese rótulo y su valor están impresos en GRIS CLARO y letra chica en un margen superior, mientras que justo al lado hay un código de barras con un número en negro nítido. El número correcto es el del texto gris claro, NO el negro del código de barras.
+
+Cómo reconocer el número del código de barras para descartarlo: está pegado a las barras verticales (arriba o abajo), suele tener 12 o más dígitos y NO contiene letras ni guiones. NUNCA lo devuelvas, aunque sea el número más grande y legible de la zona.
+
+Si NO encontrás el rótulo, o no podés leer su valor con claridad, devolvé null. Es correcto devolver null; lo que está prohibido es reemplazarlo por otro número de la factura.
 
 Devolvé ÚNICAMENTE un objeto JSON, sin texto previo ni posterior y sin bloque de código, con exactamente estas claves:
 
 - "proveedor": nombre de la empresa emisora, como texto.
 
-- "monto": importe a pagar, como número con punto decimal y sin símbolo. Convertí el formato argentino: "$45.123,45" → 45123.45; "$45.123" → 45123. Si hay dos vencimientos con importes distintos, usá el del PRIMER vencimiento.
+- "monto": importe a pagar, como número con punto decimal y sin símbolo. Convertí el formato argentino: "$45.123,45" → 45123.45; "$45.123" → 45123. Si hay dos vencimientos con importes distintos, usá el del PRIMER vencimiento. El importe suele aparecer más de una vez (arriba como "TOTAL A PAGAR" y al pie como "Total a pagar" o "TOTAL LIQUIDACIÓN"): leé ambos y verificá dígito por dígito que coincidan antes de responder. Si no coinciden, usá el del pie.
 
 - "fecha_vencimiento": PRIMER vencimiento, formato "DD/MM/YYYY".
 
@@ -31,5 +35,7 @@ Devolvé ÚNICAMENTE un objeto JSON, sin texto previo ni posterior y sin bloque 
 - "periodo": período facturado, formato "MM/YYYY".
 
 - "numero_comprobante": el identificador descrito en la REGLA CRÍTICA de arriba, siempre como cadena de texto entre comillas (aunque sean solo dígitos). Puede combinar letras, números y guiones. Además del número del código de barras, NO devuelvas ninguno de estos: número de cliente, número de cuenta, número de socio, cuenta de servicios, código de pago electrónico o débito automático, referencia de Pago Fácil / Rapipago / Link / Banelco, CUIT, número de medidor ni número de factura de otro período.
+
+- "numero_comprobante_rotulo": copiá TEXTUALMENTE el rótulo impreso que acompaña al número que devolviste en el campo anterior, tal como figura en la factura. Si el número no tiene ningún rótulo al lado, devolvé null. No inventes un rótulo: si no lo leés, es null.
 
 - "categoria": exactamente uno de estos valores: "electricidad", "agua", "gas", "internet", "alquiler", "expensas", "otro".`;

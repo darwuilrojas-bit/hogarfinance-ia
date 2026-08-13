@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
 import { PROMPT_OCR } from "@/app/api/ocr/prompt";
-import { textoComprobante } from "@/app/api/ocr/campos";
+import { rotuloEsDeFactura, textoComprobante } from "@/app/api/ocr/campos";
 
 /**
  * Banco de pruebas del OCR contra facturas reales.
@@ -34,10 +34,20 @@ import { textoComprobante } from "@/app/api/ocr/campos";
 
 type CasoEsperado = {
   archivo: string;
-  proveedor?: string;
+  /** Alcanza con que el nombre leído contenga alguna de estas variantes. */
+  proveedor?: string | string[];
+  /** Debe salir exactamente este valor. */
   numero_comprobante?: string | null;
+  /**
+   * El valor correcto, para facturas donde el modelo a veces no puede leerlo.
+   * Acepta ese valor o null (el sistema no debe inventar), pero nunca otro.
+   * Es la garantía honesta cuando la impresión es ilegible para el modelo.
+   */
+  numero_comprobante_o_null?: string;
   monto?: number;
   fecha_vencimiento?: string;
+  /** null si la factura no tiene segundo vencimiento. */
+  fecha_vencimiento_2?: string | null;
   categoria?: string;
   /** Valores que el modelo suele confundir y NO debe devolver como número. */
   no_debe_devolver?: string[];
@@ -77,6 +87,9 @@ async function extraer(rutaImagen: string) {
     body: JSON.stringify({
       model: "gpt-4o-mini",
       max_tokens: 500,
+      // Mismos parámetros que producción: sin temperatura 0 el resultado
+      // cambia en cada corrida y el banco de pruebas se vuelve inútil.
+      temperature: 0,
       messages: [
         {
           role: "user",
@@ -84,7 +97,12 @@ async function extraer(rutaImagen: string) {
             { type: "text", text: PROMPT_OCR },
             {
               type: "image_url",
-              image_url: { url: `data:${tipo};base64,${base64}` },
+              // Mismo detalle que producción: sin "high" el modelo ve la
+              // imagen en baja resolución y no lee la letra chica.
+              image_url: {
+                url: `data:${tipo};base64,${base64}`,
+                detail: "high",
+              },
             },
           ],
         },
@@ -129,18 +147,33 @@ test.describe("Extracción sobre facturas reales", () => {
       // ver es qué devolvió realmente el modelo.
       console.log(`\n${caso.archivo} →`, JSON.stringify(crudo, null, 2));
 
-      const numero = textoComprobante(crudo.numero_comprobante);
+      // Misma validación que /api/ocr: el número solo vale si vino con un
+      // rótulo de factura al lado.
+      const numero = rotuloEsDeFactura(crudo.numero_comprobante_rotulo)
+        ? textoComprobante(crudo.numero_comprobante)
+        : null;
 
       if (caso.numero_comprobante !== undefined) {
         expect(numero, "número de factura").toBe(caso.numero_comprobante);
+      }
+      if (caso.numero_comprobante_o_null !== undefined) {
+        expect(
+          numero === caso.numero_comprobante_o_null || numero === null,
+          `número de factura: se esperaba "${caso.numero_comprobante_o_null}" o null, salió "${numero}"`
+        ).toBe(true);
       }
       for (const prohibido of caso.no_debe_devolver ?? []) {
         expect(numero, `no debe devolver ${prohibido}`).not.toBe(prohibido);
       }
       if (caso.proveedor !== undefined) {
-        expect(String(crudo.proveedor ?? "").toLowerCase()).toContain(
-          caso.proveedor.toLowerCase()
-        );
+        const leido = String(crudo.proveedor ?? "").toLowerCase();
+        const variantes = Array.isArray(caso.proveedor)
+          ? caso.proveedor
+          : [caso.proveedor];
+        expect(
+          variantes.some((v) => leido.includes(v.toLowerCase())),
+          `proveedor "${leido}" no coincide con ninguna de ${JSON.stringify(variantes)}`
+        ).toBe(true);
       }
       if (caso.monto !== undefined) {
         expect(Number(crudo.monto), "monto").toBeCloseTo(caso.monto, 2);
@@ -148,6 +181,11 @@ test.describe("Extracción sobre facturas reales", () => {
       if (caso.fecha_vencimiento !== undefined) {
         expect(crudo.fecha_vencimiento, "1er vencimiento").toBe(
           caso.fecha_vencimiento
+        );
+      }
+      if (caso.fecha_vencimiento_2 !== undefined) {
+        expect(crudo.fecha_vencimiento_2 ?? null, "2do vencimiento").toBe(
+          caso.fecha_vencimiento_2
         );
       }
       if (caso.categoria !== undefined) {

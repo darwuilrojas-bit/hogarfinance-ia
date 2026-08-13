@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { BUCKET_COMPROBANTES } from "@/lib/supabase/types";
-import { textoComprobante } from "./campos";
+import { rotuloEsDeFactura, textoComprobante } from "./campos";
 import { PROMPT_OCR } from "./prompt";
 
 
@@ -176,12 +176,23 @@ export async function POST(request: Request) {
     body: JSON.stringify({
       model: process.env.OPENAI_OCR_MODEL ?? "gpt-4o-mini",
       response_format: { type: "json_object" },
+      // Extraer datos de una factura no es una tarea creativa: la misma
+      // imagen debe dar siempre el mismo resultado. Sin esto el modelo usa
+      // temperatura 1 y devuelve un valor distinto en cada lectura.
+      temperature: 0,
       messages: [
         {
           role: "user",
           content: [
             { type: "text", text: PROMPT_OCR },
-            { type: "image_url", image_url: { url: urlImagen } },
+            {
+              type: "image_url",
+              // "high" procesa la imagen en mosaicos a mayor resolución. Sin
+              // esto el modelo la ve en baja y no puede leer la letra chica
+              // ni el texto de bajo contraste (el N° de factura de MetroGas
+              // está impreso en gris claro).
+              image_url: { url: urlImagen, detail: "high" },
+            },
           ],
         },
       ],
@@ -245,7 +256,12 @@ export async function POST(request: Request) {
       /^\d{1,2}\/\d{4}$/.test(crudo.periodo)
         ? crudo.periodo
         : null,
-    numero_comprobante: textoComprobante(crudo.numero_comprobante),
+    // El número solo se acepta si el modelo pudo citar un rótulo de factura
+    // junto a él. Sin rótulo válido se descarta: es preferible que el campo
+    // quede vacío (y el usuario lo complete) a guardar el número equivocado.
+    numero_comprobante: rotuloEsDeFactura(crudo.numero_comprobante_rotulo)
+      ? textoComprobante(crudo.numero_comprobante)
+      : null,
     categoria: CATEGORIAS_VALIDAS.includes(categoria) ? categoria : null,
     aprendizaje: [],
     confianza: {
