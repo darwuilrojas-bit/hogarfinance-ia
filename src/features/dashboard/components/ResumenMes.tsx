@@ -5,11 +5,17 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { formatMonto, MESES, periodoActual, sumarMeses } from "@/lib/formato";
 import { rangoMes } from "@/lib/fechas";
+import {
+  guardarPresupuestoDelMes,
+  presupuestoDelMes,
+} from "@/lib/presupuestos";
 import type { Periodo } from "@/lib/formato";
 
 type Resumen = {
   total: number;
   presupuesto: number | null;
+  /** true si el mes tiene un presupuesto propio, no el valor por defecto. */
+  propio: boolean;
 };
 
 /**
@@ -21,6 +27,35 @@ export function ResumenMes() {
   const [periodo, setPeriodo] = useState<Periodo>(periodoActual);
   const [resumen, setResumen] = useState<Resumen | null>(null);
   const [cargando, setCargando] = useState(true);
+  const [editando, setEditando] = useState(false);
+  const [valor, setValor] = useState("");
+  const [guardando, setGuardando] = useState(false);
+  const [version, setVersion] = useState(0);
+
+  async function guardarPresupuesto(e: React.FormEvent) {
+    e.preventDefault();
+    const limpio = valor.trim().replace(/\./g, "").replace(",", ".");
+    const monto = limpio === "" ? null : Number(limpio);
+    if (monto !== null && (!Number.isFinite(monto) || monto < 0)) return;
+
+    setGuardando(true);
+    const supabase = createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user) {
+      await guardarPresupuestoDelMes(
+        supabase,
+        user.id,
+        periodo.mes,
+        periodo.anio,
+        monto
+      );
+    }
+    setGuardando(false);
+    setEditando(false);
+    setVersion((v) => v + 1);
+  }
 
   useEffect(() => {
     let cancelado = false;
@@ -28,8 +63,8 @@ export function ResumenMes() {
       setCargando(true);
       const supabase = createClient();
       const rango = rangoMes(periodo.mes, periodo.anio);
-      const [perfilRes, pagosRes] = await Promise.all([
-        supabase.from("usuarios").select("presupuesto_mensual").single(),
+      const [presu, pagosRes] = await Promise.all([
+        presupuestoDelMes(supabase, periodo.mes, periodo.anio),
         // Por fecha de pago: la plata sale del presupuesto del mes en que
         // se pagó, sin importar qué período facture la factura.
         supabase
@@ -43,17 +78,16 @@ export function ResumenMes() {
         (suma, p) => suma + Number(p.monto),
         0
       );
-      setResumen({
-        total,
-        presupuesto: perfilRes.data?.presupuesto_mensual ?? null,
-      });
+      setResumen({ total, presupuesto: presu.monto, propio: presu.propio });
+      setValor(presu.propio && presu.monto !== null ? String(presu.monto) : "");
+      setEditando(false);
       setCargando(false);
     }
     cargar();
     return () => {
       cancelado = true;
     };
-  }, [periodo]);
+  }, [periodo, version]);
 
   const presupuesto = resumen?.presupuesto ?? null;
   const total = resumen?.total ?? 0;
@@ -116,12 +150,67 @@ export function ResumenMes() {
         </p>
       )}
 
+      {/* Editor del presupuesto de ESTE mes */}
+      {!cargando && editando ? (
+        <form onSubmit={guardarPresupuesto} className="mt-4">
+          <label
+            htmlFor="presupuesto-mes"
+            className="text-xs opacity-80"
+          >
+            Presupuesto de {MESES[periodo.mes - 1].toLowerCase()} {periodo.anio}
+          </label>
+          <div className="mt-1.5 flex gap-2">
+            <input
+              id="presupuesto-mes"
+              type="text"
+              inputMode="decimal"
+              autoFocus
+              value={valor}
+              onChange={(e) => setValor(e.target.value)}
+              placeholder="Ej.: 250000"
+              className="h-10 min-w-0 flex-1 rounded-xl bg-white/20 px-3 text-sm text-white outline-none placeholder:text-white/60 focus:bg-white/25"
+            />
+            <button
+              type="submit"
+              disabled={guardando}
+              className="h-10 rounded-xl bg-white px-4 text-sm font-semibold text-primary disabled:opacity-60"
+            >
+              {guardando ? "..." : "Guardar"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setEditando(false)}
+              className="h-10 rounded-xl px-2 text-sm font-medium text-white/80"
+            >
+              Cancelar
+            </button>
+          </div>
+          <p className="mt-1.5 text-[11px] opacity-70">
+            Dejalo vacío para que este mes vuelva a usar tu presupuesto por
+            defecto.
+          </p>
+        </form>
+      ) : null}
+
       {/* Presupuesto y barra de progreso */}
-      {!cargando && presupuesto !== null && presupuesto > 0 ? (
+      {!cargando && !editando && presupuesto !== null && presupuesto > 0 ? (
         <div className="mt-4">
           <div className="mb-1.5 flex items-center justify-between text-xs">
-            <span className="opacity-80">
+            <span className="flex items-center gap-1.5 opacity-80">
               Presupuesto: {formatMonto(presupuesto)}
+              {!resumen?.propio ? (
+                <span className="rounded bg-white/20 px-1.5 py-0.5 text-[10px]">
+                  por defecto
+                </span>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => setEditando(true)}
+                aria-label={`Editar el presupuesto de ${MESES[periodo.mes - 1]} ${periodo.anio}`}
+                className="rounded px-1 underline decoration-white/40 underline-offset-2 active:opacity-70"
+              >
+                Editar
+              </button>
             </span>
             <span className="font-semibold">{Math.round(pct!)}%</span>
           </div>
@@ -142,12 +231,22 @@ export function ResumenMes() {
         </div>
       ) : null}
 
-      {!cargando && (presupuesto === null || presupuesto === 0) ? (
+      {!cargando && !editando && (presupuesto === null || presupuesto === 0) ? (
         <p className="mt-3 text-xs opacity-90">
-          Todavía no definiste tu presupuesto mensual.{" "}
+          No definiste el presupuesto de{" "}
+          {MESES[periodo.mes - 1].toLowerCase()} {periodo.anio}.{" "}
+          <button
+            type="button"
+            onClick={() => setEditando(true)}
+            className="font-semibold underline"
+          >
+            Cargalo ahora
+          </button>{" "}
+          o fijá uno por defecto en{" "}
           <Link href="/perfil" className="font-semibold underline">
-            Configuralo en Perfil
+            Perfil
           </Link>
+          .
         </p>
       ) : null}
     </section>

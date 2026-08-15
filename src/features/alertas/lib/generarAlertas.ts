@@ -6,6 +6,7 @@ import {
   sumarMeses,
 } from "@/lib/formato";
 import { rangoMes } from "@/lib/fechas";
+import { presupuestoDelMes } from "@/lib/presupuestos";
 import { CATEGORIAS } from "@/lib/supabase/types";
 import type { Categoria } from "@/lib/supabase/types";
 import { diasHasta, vencimientoEfectivo } from "./vencimientos";
@@ -165,7 +166,8 @@ export async function generarAlertas(): Promise<number> {
   //     Se mide por FECHA DE PAGO, no por período facturado: el presupuesto
   //     es la plata que sale del bolsillo este mes. Tiene que dar lo mismo
   //     que la tarjeta de resumen del dashboard.
-  const presupuesto = perfil?.presupuesto_mensual;
+  // El presupuesto del mes en curso: el propio si lo tiene, si no el global.
+  const presupuesto = (await presupuestoDelMes(supabase, mes, anio)).monto;
   if (prefs.presupuesto && presupuesto && presupuesto > 0) {
     const rangoActual = rangoMes(mes, anio);
     const totalPagado = pagos

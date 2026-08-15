@@ -193,7 +193,7 @@ export function PerfilForm() {
         className="flex flex-col gap-4 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm"
       >
         <h2 className="text-sm font-semibold text-gray-900">
-          Presupuesto mensual
+          Presupuesto mensual por defecto
         </h2>
         <Input
           label="Presupuesto del hogar (en pesos)"
@@ -205,8 +205,10 @@ export function PerfilForm() {
           value={presupuesto}
           onChange={(e) => setPresupuesto(e.target.value)}
         />
-        <p className="-mt-2 text-xs text-gray-500">
-          Te avisaremos cuando estés cerca de alcanzarlo.
+        <p className="-mt-2 text-xs leading-relaxed text-gray-500">
+          Se usa en los meses que no tengan uno propio. Para fijar el de un mes
+          en particular, entrá a Inicio, elegí ese mes y tocá «Editar» sobre el
+          presupuesto. Te avisamos cuando estés cerca de alcanzarlo.
         </p>
 
         {sugerencia ? (
