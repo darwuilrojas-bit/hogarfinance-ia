@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { mesDeIso } from "@/lib/fechas";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import {
@@ -42,11 +43,9 @@ export function PerfilForm() {
           .from("usuarios")
           .select("email, nombre, presupuesto_mensual")
           .single(),
-        supabase
-          .from("comprobantes_pago")
-          .select(
-            "monto, factura:facturas!inner(periodo_mes, periodo_anio)"
-          ),
+        // Por fecha de pago, igual que el resumen del dashboard: la
+        // sugerencia tiene que medir lo mismo que después se compara.
+        supabase.from("comprobantes_pago").select("monto, fecha_pago"),
       ]);
       if (cancelado) return;
       const data = perfilRes.data;
@@ -58,13 +57,11 @@ export function PerfilForm() {
 
       const pagos = ((gastosRes.data ?? []) as unknown as Array<{
         monto: number;
-        factura:
-          | { periodo_mes: number; periodo_anio: number }
-          | { periodo_mes: number; periodo_anio: number }[];
-      }>).map((p) => {
-        const f = Array.isArray(p.factura) ? p.factura[0] : p.factura;
-        return { monto: Number(p.monto), ...f };
-      });
+        fecha_pago: string;
+      }>).map((p) => ({
+        monto: Number(p.monto),
+        ...mesDeIso(p.fecha_pago),
+      }));
 
       // Sugerencia inteligente: promedio de gasto de los últimos 3 meses
       const actual = periodoActual();
@@ -72,7 +69,7 @@ export function PerfilForm() {
       const totalesMes = ventana
         .map((p) =>
           pagos
-            .filter((g) => g.periodo_mes === p.mes && g.periodo_anio === p.anio)
+            .filter((g) => g.mes === p.mes && g.anio === p.anio)
             .reduce((s, g) => s + g.monto, 0)
         )
         .filter((t) => t > 0);

@@ -5,6 +5,7 @@ import {
   periodoActual,
   sumarMeses,
 } from "@/lib/formato";
+import { rangoMes } from "@/lib/fechas";
 import { CATEGORIAS } from "@/lib/supabase/types";
 import type { Categoria } from "@/lib/supabase/types";
 import { diasHasta, vencimientoEfectivo } from "./vencimientos";
@@ -24,6 +25,7 @@ type FacturaLigera = {
 type PagoLigero = {
   id: string;
   monto: number;
+  fecha_pago: string;
   factura: FacturaLigera | FacturaLigera[];
 };
 
@@ -66,16 +68,19 @@ export async function generarAlertas(): Promise<number> {
     supabase
       .from("comprobantes_pago")
       .select(
-        "id, monto, factura:facturas!inner(id, proveedor, categoria, estado, periodo_mes, periodo_anio, fecha_vencimiento, fecha_vencimiento_2)"
+        "id, monto, fecha_pago, factura:facturas!inner(id, proveedor, categoria, estado, periodo_mes, periodo_anio, fecha_vencimiento, fecha_vencimiento_2)"
       ),
     supabase.from("usuarios").select("*").single(),
     supabase.from("alertas").select("mensaje").gte("fecha_alerta", hace60Dias),
   ]);
 
   const facturas = (facturasRes.data ?? []) as FacturaLigera[];
-  const pagos = ((pagosRes.data ?? []) as unknown as PagoLigero[]).map(
-    (p) => ({ id: p.id, monto: Number(p.monto), factura: facturaDe(p) })
-  );
+  const pagos = ((pagosRes.data ?? []) as unknown as PagoLigero[]).map((p) => ({
+    id: p.id,
+    monto: Number(p.monto),
+    fecha_pago: p.fecha_pago,
+    factura: facturaDe(p),
+  }));
   const existentes = new Set((alertasRes.data ?? []).map((a) => a.mensaje));
 
   // Preferencias del usuario (con valores por defecto si la migración
@@ -157,9 +162,18 @@ export async function generarAlertas(): Promise<number> {
   }
 
   // --- 4: presupuesto al 90 % ---
+  //     Se mide por FECHA DE PAGO, no por período facturado: el presupuesto
+  //     es la plata que sale del bolsillo este mes. Tiene que dar lo mismo
+  //     que la tarjeta de resumen del dashboard.
   const presupuesto = perfil?.presupuesto_mensual;
   if (prefs.presupuesto && presupuesto && presupuesto > 0) {
-    const totalPagado = pagosDelMes.reduce((s, p) => s + p.monto, 0);
+    const rangoActual = rangoMes(mes, anio);
+    const totalPagado = pagos
+      .filter(
+        (p) =>
+          p.fecha_pago >= rangoActual.desde && p.fecha_pago < rangoActual.hasta
+      )
+      .reduce((s, p) => s + p.monto, 0);
     if (totalPagado >= presupuesto * 0.9) {
       agregar(
         "presupuesto",
@@ -183,12 +197,13 @@ export async function generarAlertas(): Promise<number> {
   );
 
   if (!yaGenerado && facturasPrev.length > 0) {
-    const pagadoDe = (p: { mes: number; anio: number }) =>
-      pagos
-        .filter(
-          (x) => x.factura.periodo_mes === p.mes && x.factura.periodo_anio === p.anio
-        )
+    // También por fecha de pago: el resumen del mes es lo que se pagó.
+    const pagadoDe = (p: { mes: number; anio: number }) => {
+      const r = rangoMes(p.mes, p.anio);
+      return pagos
+        .filter((x) => x.fecha_pago >= r.desde && x.fecha_pago < r.hasta)
         .reduce((s, x) => s + x.monto, 0);
+    };
 
     const totalPrev = pagadoDe(prev);
     const partes: string[] = [];
@@ -202,8 +217,9 @@ export async function generarAlertas(): Promise<number> {
 
     // Categoría con mayor gasto
     const porCategoria = new Map<string, number>();
+    const rangoPrev = rangoMes(prev.mes, prev.anio);
     for (const p of pagos) {
-      if (p.factura.periodo_mes !== prev.mes || p.factura.periodo_anio !== prev.anio)
+      if (p.fecha_pago < rangoPrev.desde || p.fecha_pago >= rangoPrev.hasta)
         continue;
       porCategoria.set(
         p.factura.categoria,

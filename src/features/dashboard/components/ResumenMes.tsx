@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { formatMonto, MESES, periodoActual, sumarMeses } from "@/lib/formato";
+import { rangoMes } from "@/lib/fechas";
 import type { Periodo } from "@/lib/formato";
 
 type Resumen = {
@@ -12,9 +13,9 @@ type Resumen = {
 };
 
 /**
- * Tarjeta de resumen del mes: total gastado (pagos registrados este
- * período), presupuesto del usuario, barra de progreso y mensaje
- * según el porcentaje usado.
+ * Tarjeta de resumen del mes: total gastado (pagos hechos durante el mes
+ * calendario, por fecha de pago), presupuesto del usuario, barra de
+ * progreso y mensaje según el porcentaje usado.
  */
 export function ResumenMes() {
   const [periodo, setPeriodo] = useState<Periodo>(periodoActual);
@@ -26,13 +27,16 @@ export function ResumenMes() {
     async function cargar() {
       setCargando(true);
       const supabase = createClient();
+      const rango = rangoMes(periodo.mes, periodo.anio);
       const [perfilRes, pagosRes] = await Promise.all([
         supabase.from("usuarios").select("presupuesto_mensual").single(),
+        // Por fecha de pago: la plata sale del presupuesto del mes en que
+        // se pagó, sin importar qué período facture la factura.
         supabase
           .from("comprobantes_pago")
-          .select("monto, factura:facturas!inner(periodo_mes, periodo_anio)")
-          .eq("factura.periodo_mes", periodo.mes)
-          .eq("factura.periodo_anio", periodo.anio),
+          .select("monto")
+          .gte("fecha_pago", rango.desde)
+          .lt("fecha_pago", rango.hasta),
       ]);
       if (cancelado) return;
       const total = (pagosRes.data ?? []).reduce(

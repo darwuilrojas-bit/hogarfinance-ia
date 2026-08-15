@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { CategoriaIcon } from "@/components/ui/CategoriaIcon";
+import { rangoMes } from "@/lib/fechas";
 import {
   formatMonto,
   formatMontoCompacto,
@@ -87,13 +88,16 @@ export function ListaGastos() {
     let cancelado = false;
     async function cargar() {
       const supabase = createClient();
+      const rango = rangoMes(periodo.mes, periodo.anio);
       const { data } = await supabase
         .from("comprobantes_pago")
         .select(
           "id, monto, fecha_pago, metodo_pago, numero_operacion, notas, imagen_url, factura:facturas!inner(id, proveedor, categoria, estado, numero_comprobante, fecha_vencimiento)"
         )
-        .eq("factura.periodo_mes", periodo.mes)
-        .eq("factura.periodo_anio", periodo.anio);
+        // Por fecha de pago: el gasto pertenece al mes en que salió la plata,
+        // no al período que factura el servicio.
+        .gte("fecha_pago", rango.desde)
+        .lt("fecha_pago", rango.hasta);
       if (cancelado) return;
       const lista = ((data ?? []) as unknown as FilaLedger[]).map((f) => ({
         ...f,

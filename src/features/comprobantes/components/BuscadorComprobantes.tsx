@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { mesDeIso } from "@/lib/fechas";
 import { CategoriaIcon } from "@/components/ui/CategoriaIcon";
 import {
   formatMonto,
@@ -221,8 +222,13 @@ export function BuscadorComprobantes() {
     if (data?.signedUrl) window.open(data.signedUrl, "_blank");
   }
 
+  // Los filtros de mes y año son por FECHA DE PAGO: si el usuario busca
+  // "agosto" espera encontrar lo que pagó en agosto, no lo que factura
+  // agosto. El período de la factura se sigue mostrando en el detalle.
   const anios = [
-    ...new Set((comprobantes ?? []).map((c) => c.factura.periodo_anio)),
+    ...new Set(
+      (comprobantes ?? []).map((c) => mesDeIso(c.fecha_pago).anio)
+    ),
   ].sort((a, b) => b - a);
 
   const t = texto.trim().toLowerCase();
@@ -230,8 +236,9 @@ export function BuscadorComprobantes() {
     (c) =>
       (aplicados.proveedor === "todos" ||
         c.factura.proveedor === aplicados.proveedor) &&
-      (aplicados.mes === 0 || c.factura.periodo_mes === aplicados.mes) &&
-      (aplicados.anio === 0 || c.factura.periodo_anio === aplicados.anio) &&
+      (aplicados.mes === 0 || mesDeIso(c.fecha_pago).mes === aplicados.mes) &&
+      (aplicados.anio === 0 ||
+        mesDeIso(c.fecha_pago).anio === aplicados.anio) &&
       (aplicados.categoria === "todas" ||
         c.factura.categoria === aplicados.categoria) &&
       (aplicados.estado === "todos" || c.factura.estado === aplicados.estado) &&

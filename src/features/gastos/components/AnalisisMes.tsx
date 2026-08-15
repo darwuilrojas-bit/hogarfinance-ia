@@ -2,22 +2,24 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { mesDeIso, rangoMes } from "@/lib/fechas";
 import { formatMontoCompacto, MESES, sumarMeses } from "@/lib/formato";
 import type { Periodo } from "@/lib/formato";
 import { CATEGORIAS } from "@/lib/supabase/types";
 import type { Categoria } from "@/lib/supabase/types";
 
+/** Un pago ubicado en el mes en que se hizo, no en el que factura. */
 type PagoLiviano = {
   monto: number;
-  periodo_mes: number;
-  periodo_anio: number;
+  mes: number;
+  anio: number;
   categoria: Categoria;
 };
 
 /**
  * Panel de análisis del mes: desglose por categoría, variación
  * contra el mes anterior y promedio mensual del año en curso.
- * Sobre los pagos efectivamente registrados (comprobantes_pago).
+ * Sobre los pagos efectivamente registrados, ubicados por fecha de pago.
  */
 export function AnalisisMes({ periodo }: { periodo: Periodo }) {
   const [pagos, setPagos] = useState<PagoLiviano[] | null>(null);
@@ -29,27 +31,31 @@ export function AnalisisMes({ periodo }: { periodo: Periodo }) {
     let cancelado = false;
     async function cargar() {
       const supabase = createClient();
-      const anios = [
-        ...new Set([periodo.anio, sumarMeses(periodo, -1).anio, anioActual]),
-      ];
+      // Hace falta el mes elegido, el anterior (para la variación) y todo el
+      // año en curso (para el promedio): se pide el rango que los cubre.
+      const prev = sumarMeses(periodo, -1);
+      const desde = [
+        rangoMes(prev.mes, prev.anio).desde,
+        `${anioActual}-01-01`,
+      ].sort()[0];
+      const hasta = [
+        rangoMes(periodo.mes, periodo.anio).hasta,
+        `${anioActual + 1}-01-01`,
+      ].sort().reverse()[0];
       const { data } = await supabase
         .from("comprobantes_pago")
-        .select(
-          "monto, factura:facturas!inner(categoria, periodo_mes, periodo_anio)"
-        )
-        .in("factura.periodo_anio", anios);
+        .select("monto, fecha_pago, factura:facturas!inner(categoria)")
+        .gte("fecha_pago", desde)
+        .lt("fecha_pago", hasta);
       if (cancelado) return;
       const lista = ((data ?? []) as unknown as Array<{
         monto: number;
-        factura: PagoLiviano | PagoLiviano[];
+        fecha_pago: string;
+        factura: { categoria: Categoria } | { categoria: Categoria }[];
       }>).map((p) => {
         const f = Array.isArray(p.factura) ? p.factura[0] : p.factura;
-        return {
-          monto: Number(p.monto),
-          periodo_mes: f.periodo_mes,
-          periodo_anio: f.periodo_anio,
-          categoria: f.categoria,
-        };
+        const { mes, anio } = mesDeIso(p.fecha_pago);
+        return { monto: Number(p.monto), mes, anio, categoria: f.categoria };
       });
       setPagos(lista);
     }
@@ -64,7 +70,7 @@ export function AnalisisMes({ periodo }: { periodo: Periodo }) {
   }
 
   const de = (p: Periodo) =>
-    pagos.filter((g) => g.periodo_mes === p.mes && g.periodo_anio === p.anio);
+    pagos.filter((g) => g.mes === p.mes && g.anio === p.anio);
 
   // Desglose por categoría del mes seleccionado
   const delMes = de(periodo);
@@ -85,8 +91,8 @@ export function AnalisisMes({ periodo }: { periodo: Periodo }) {
     totalAnterior > 0 ? ((totalMes - totalAnterior) / totalAnterior) * 100 : null;
 
   // Promedio mensual del año en curso (meses con pagos)
-  const pagosAnio = pagos.filter((g) => g.periodo_anio === anioActual);
-  const mesesConDatos = new Set(pagosAnio.map((g) => g.periodo_mes));
+  const pagosAnio = pagos.filter((g) => g.anio === anioActual);
+  const mesesConDatos = new Set(pagosAnio.map((g) => g.mes));
   const promedioMensual =
     mesesConDatos.size > 0
       ? pagosAnio.reduce((s, g) => s + Number(g.monto), 0) / mesesConDatos.size

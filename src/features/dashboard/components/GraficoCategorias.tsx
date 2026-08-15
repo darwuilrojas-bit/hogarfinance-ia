@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { mesDeIso, rangoMes } from "@/lib/fechas";
 import {
   formatMontoCompacto,
   MESES,
@@ -47,14 +48,19 @@ export function GraficoCategorias() {
     let cancelado = false;
     async function cargar() {
       const supabase = createClient();
-      const anios = [...new Set(periodos.map((p) => p.anio))];
+      // Se agrupa por fecha de pago: cada barra es lo que salió del bolsillo
+      // ese mes calendario, no lo que facturó el servicio.
+      const desde = rangoMes(periodos[0].mes, periodos[0].anio).desde;
+      const hasta = rangoMes(
+        periodos[periodos.length - 1].mes,
+        periodos[periodos.length - 1].anio
+      ).hasta;
       const { data } = await supabase
         .from("comprobantes_pago")
-        .select(
-          "monto, factura:facturas!inner(categoria, periodo_mes, periodo_anio)"
-        )
+        .select("monto, fecha_pago, factura:facturas!inner(categoria)")
         .in("factura.categoria", SERIES.map((s) => s.categoria))
-        .in("factura.periodo_anio", anios);
+        .gte("fecha_pago", desde)
+        .lt("fecha_pago", hasta);
       if (cancelado) return;
 
       const porMes: MesDatos[] = periodos.map((periodo) => ({
@@ -63,8 +69,9 @@ export function GraficoCategorias() {
       }));
       for (const p of data ?? []) {
         const f = Array.isArray(p.factura) ? p.factura[0] : p.factura;
+        const { mes, anio } = mesDeIso(p.fecha_pago);
         const idx = periodos.findIndex(
-          (per) => per.mes === f.periodo_mes && per.anio === f.periodo_anio
+          (per) => per.mes === mes && per.anio === anio
         );
         if (idx >= 0) {
           porMes[idx].totales[f.categoria as CategoriaSerie] += Number(p.monto);

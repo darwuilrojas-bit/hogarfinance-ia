@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { mesDeIso } from "@/lib/fechas";
 import { formatMontoCompacto, MESES } from "@/lib/formato";
 
 type Stats = {
@@ -28,7 +29,7 @@ export function EstadisticasPersonales() {
         supabase
           .from("comprobantes_pago")
           .select(
-            "monto, imagen_url, factura:facturas!inner(proveedor, periodo_mes, periodo_anio)"
+            "monto, imagen_url, fecha_pago, factura:facturas!inner(proveedor)"
           ),
         supabase.from("usuarios").select("fecha_creacion").single(),
       ]);
@@ -36,20 +37,27 @@ export function EstadisticasPersonales() {
       const pagos = ((pagosRes.data ?? []) as unknown as Array<{
         monto: number;
         imagen_url: string | null;
-        factura:
-          | { proveedor: string; periodo_mes: number; periodo_anio: number }
-          | { proveedor: string; periodo_mes: number; periodo_anio: number }[];
+        fecha_pago: string;
+        factura: { proveedor: string } | { proveedor: string }[];
       }>).map((p) => {
         const f = Array.isArray(p.factura) ? p.factura[0] : p.factura;
-        return { monto: Number(p.monto), imagen_url: p.imagen_url, ...f };
+        // Cada pago cuenta en el mes en que se hizo, no en el que factura.
+        const { mes, anio } = mesDeIso(p.fecha_pago);
+        return {
+          monto: Number(p.monto),
+          imagen_url: p.imagen_url,
+          mes,
+          anio,
+          ...f,
+        };
       });
       const anioActual = new Date().getFullYear();
 
       // Mes con mayor gasto del año en curso
       const porMes = new Map<number, number>();
       for (const p of pagos) {
-        if (p.periodo_anio === anioActual) {
-          porMes.set(p.periodo_mes, (porMes.get(p.periodo_mes) ?? 0) + p.monto);
+        if (p.anio === anioActual) {
+          porMes.set(p.mes, (porMes.get(p.mes) ?? 0) + p.monto);
         }
       }
       let mesMayor: Stats["mesMayorGasto"] = null;

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { mesDeIso, rangoMes } from "@/lib/fechas";
 import { CategoriaIcon } from "@/components/ui/CategoriaIcon";
 import {
   formatMontoCompacto,
@@ -14,28 +15,27 @@ import {
 import { CATEGORIAS } from "@/lib/supabase/types";
 import type { Categoria } from "@/lib/supabase/types";
 
+/** Un pago ubicado en el mes en que se hizo, no en el que factura. */
 type GastoRow = {
   monto: number;
   categoria: Categoria;
   proveedor: string;
-  periodo_mes: number;
-  periodo_anio: number;
+  mes: number;
+  anio: number;
 };
 
 type FacturaEmbebida = {
   categoria: Categoria;
   proveedor: string;
-  periodo_mes: number;
-  periodo_anio: number;
 };
 
 const RANGOS = [3, 6, 12] as const;
 const ALTO_PLOT = 120; // px
 
 /**
- * Pantalla de Reportes: análisis de gastos por período y categoría
- * con evolución mensual, top de proveedores e insights automáticos.
- * Todos los cálculos se hacen sobre los gastos pagados del usuario.
+ * Pantalla de Reportes: análisis de gastos por mes y categoría con
+ * evolución mensual, top de proveedores e insights automáticos. Cada pago
+ * se ubica en el mes en que se hizo (fecha de pago).
  */
 export function ResumenReportes() {
   const [gastos, setGastos] = useState<GastoRow[] | null>(null);
@@ -49,20 +49,23 @@ export function ResumenReportes() {
     let cancelado = false;
     async function cargar() {
       const supabase = createClient();
-      const anios = [...new Set(periodos12.map((p) => p.anio))];
+      const desde = rangoMes(periodos12[0].mes, periodos12[0].anio).desde;
+      const ultimo = periodos12[periodos12.length - 1];
+      const hasta = rangoMes(ultimo.mes, ultimo.anio).hasta;
       const { data } = await supabase
         .from("comprobantes_pago")
-        .select(
-          "monto, factura:facturas!inner(categoria, proveedor, periodo_mes, periodo_anio)"
-        )
-        .in("factura.periodo_anio", anios);
+        .select("monto, fecha_pago, factura:facturas!inner(categoria, proveedor)")
+        .gte("fecha_pago", desde)
+        .lt("fecha_pago", hasta);
       if (cancelado) return;
       const lista = ((data ?? []) as unknown as Array<{
         monto: number;
+        fecha_pago: string;
         factura: FacturaEmbebida | FacturaEmbebida[];
       }>).map((p) => {
         const f = Array.isArray(p.factura) ? p.factura[0] : p.factura;
-        return { monto: Number(p.monto), ...f };
+        const { mes, anio } = mesDeIso(p.fecha_pago);
+        return { monto: Number(p.monto), mes, anio, ...f };
       });
       setGastos(lista);
     }
@@ -77,7 +80,7 @@ export function ResumenReportes() {
     const periodos = ultimosPeriodos(periodoActual(), rango);
     const enRango = (g: GastoRow) =>
       periodos.some(
-        (p) => p.mes === g.periodo_mes && p.anio === g.periodo_anio
+        (p) => p.mes === g.mes && p.anio === g.anio
       );
     const delRango = gastos.filter(enRango);
 
@@ -85,7 +88,7 @@ export function ResumenReportes() {
     const porMes = periodos.map((p) => ({
       periodo: p,
       total: gastos
-        .filter((g) => g.periodo_mes === p.mes && g.periodo_anio === p.anio)
+        .filter((g) => g.mes === p.mes && g.anio === p.anio)
         .reduce((s, g) => s + Number(g.monto), 0),
     }));
     const maxMes = Math.max(...porMes.map((m) => m.total));
@@ -100,7 +103,7 @@ export function ResumenReportes() {
     const anterior = sumarMeses(actual, -1);
     const totalDe = (p: { mes: number; anio: number }) =>
       gastos
-        .filter((g) => g.periodo_mes === p.mes && g.periodo_anio === p.anio)
+        .filter((g) => g.mes === p.mes && g.anio === p.anio)
         .reduce((s, g) => s + Number(g.monto), 0);
     const totalActual = totalDe(actual);
     const totalAnterior = totalDe(anterior);
