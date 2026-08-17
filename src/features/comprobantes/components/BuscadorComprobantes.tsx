@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { vistaPrevia } from "@/lib/vistaPrevia";
 import { mesDeIso } from "@/lib/fechas";
 import { CategoriaIcon } from "@/components/ui/CategoriaIcon";
 import {
@@ -76,9 +77,13 @@ function esPdf(ruta: string): boolean {
   return ruta.toLowerCase().endsWith(".pdf");
 }
 
-/** Miniatura del comprobante (imagen firmada o ícono de PDF/sin imagen). */
-function Miniatura({ url, pdf }: { url: string | null; pdf: boolean }) {
-  if (url && !pdf) {
+/**
+ * Miniatura del comprobante. Un PDF todavía sin convertir no se puede dibujar
+ * en un <img>; una vez convertido llega como data URL y sí se muestra.
+ */
+function Miniatura({ url, ruta }: { url: string | null; ruta: string | null }) {
+  const dibujable = url && (url.startsWith("data:") || !esPdf(ruta ?? ""));
+  if (dibujable) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img
@@ -230,6 +235,27 @@ export function BuscadorComprobantes() {
       (comprobantes ?? []).map((c) => mesDeIso(c.fecha_pago).anio)
     ),
   ].sort((a, b) => b - a);
+
+  /**
+   * Los PDFs no se pueden dibujar en un <img>: se convierten a imagen al
+   * abrir el detalle, no al cargar la lista, para no hacer trabajo de más.
+   * No se guarda ninguna copia en Storage.
+   */
+  async function mostrarPdfs(c: ComprobanteRow) {
+    const pendientes = [c.imagen_url, c.factura?.imagen_url ?? null].filter(
+      (r): r is string => r !== null && esPdf(r) && !urls[r]
+    );
+    if (pendientes.length === 0) return;
+    const supabase = createClient();
+    const convertidas = await Promise.all(
+      pendientes.map(async (r) => [r, await vistaPrevia(supabase, r)] as const)
+    );
+    setUrls((previas) => {
+      const mapa = { ...previas };
+      for (const [ruta, url] of convertidas) if (url) mapa[ruta] = url;
+      return mapa;
+    });
+  }
 
   const t = texto.trim().toLowerCase();
   const resultados = (comprobantes ?? []).filter(
@@ -416,7 +442,6 @@ export function BuscadorComprobantes() {
               {resultados.map((c) => {
                 const abierto = expandido === c.id;
                 const url = c.imagen_url ? (urls[c.imagen_url] ?? null) : null;
-                const pdf = c.imagen_url ? esPdf(c.imagen_url) : false;
                 const historial = (comprobantes ?? []).filter(
                   (x) => x.factura.proveedor === c.factura.proveedor && x.id !== c.id
                 );
@@ -427,11 +452,14 @@ export function BuscadorComprobantes() {
                   >
                     <button
                       type="button"
-                      onClick={() => setExpandido(abierto ? null : c.id)}
+                      onClick={() => {
+                        setExpandido(abierto ? null : c.id);
+                        if (!abierto) mostrarPdfs(c);
+                      }}
                       aria-expanded={abierto}
                       className="flex w-full items-center gap-3 p-3 text-left"
                     >
-                      <Miniatura url={url} pdf={pdf} />
+                      <Miniatura url={url} ruta={c.imagen_url} />
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-semibold text-gray-900">
                           {c.factura.proveedor}
@@ -475,11 +503,7 @@ export function BuscadorComprobantes() {
                             <p className="mb-1 text-[11px] font-semibold text-primary">
                               📄 Factura original
                             </p>
-                            {esPdf(c.factura.imagen_url) ? (
-                              <p className="rounded-xl bg-gray-50 px-3 py-2 text-xs text-gray-500">
-                                Comprobante en PDF adjunto
-                              </p>
-                            ) : urls[c.factura.imagen_url] ? (
+                            {urls[c.factura.imagen_url] ? (
                               <button
                                 type="button"
                                 onClick={() => setZoom(urls[c.factura.imagen_url!])}
@@ -505,7 +529,7 @@ export function BuscadorComprobantes() {
                             <p className="mb-1 text-[11px] font-semibold text-secondary">
                               💳 Comprobante de pago
                             </p>
-                            {url && !pdf ? (
+                            {url ? (
                               <button
                                 type="button"
                                 onClick={() => setZoom(url)}
@@ -522,10 +546,6 @@ export function BuscadorComprobantes() {
                                   Tocá la imagen para ampliar
                                 </span>
                               </button>
-                            ) : pdf ? (
-                              <p className="rounded-xl bg-gray-50 px-3 py-2 text-xs text-gray-500">
-                                Comprobante en PDF adjunto
-                              </p>
                             ) : (
                               <div className="h-32 animate-pulse rounded-xl bg-gray-100" />
                             )}

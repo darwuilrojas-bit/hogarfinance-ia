@@ -32,10 +32,14 @@ export type DatosReporte = {
   titular: string;
   comprobante: ComprobanteReporte;
   historial: ComprobanteReporte[];
-  /** Imagen del comprobante lista para incrustar, o null si no hay. */
+  /** Imagen del comprobante de pago, o null si no hay. */
   imagen: { dataUrl: string; ancho: number; alto: number } | null;
-  /** true si el comprobante original es un PDF (no se puede incrustar). */
-  esPdfOriginal: boolean;
+  /**
+   * Imagen de la factura reclamada, o null si no hay. El reporte muestra las
+   * dos: el documento que se reclama y el que prueba que se pagó. Con una
+   * sola, quien recibe el reporte tiene que confiar en que corresponden.
+   */
+  imagenFactura: { dataUrl: string; ancho: number; alto: number } | null;
   incluirHistorial: boolean;
 };
 
@@ -146,18 +150,29 @@ export function generarReportePdf(d: DatosReporte) {
   filaDato("Estado", ETIQUETA_ESTADO[c.estado]);
   y += 4;
 
-  // ---------- Imagen del comprobante ----------
-  seccion("Comprobante de pago");
-  if (d.imagen) {
-    // Escala legible: hasta el ancho útil y máx. ~120 mm de alto
+  // ---------- Los dos documentos ----------
+  // Primero la factura reclamada y después el comprobante que la salda: el
+  // reporte se lee como el argumento que sostiene ("esto es lo que me
+  // reclaman" / "esto prueba que lo pagué").
+  const incrustar = (
+    img: { dataUrl: string; ancho: number; alto: number } | null,
+    ausente: string
+  ) => {
+    if (!img) {
+      doc.setFont("helvetica", "italic");
+      doc.setFontSize(9.5);
+      doc.setTextColor(...GRIS);
+      doc.text(ausente, MARGEN + 4, y);
+      y += 6;
+      return;
+    }
+    // Escala legible: hasta el ancho útil y máx. ~110 mm de alto, para que
+    // las dos imágenes puedan convivir en el documento.
     const maxAncho = ANCHO - MARGEN * 2 - 8;
-    const maxAlto = 120;
-    const escala = Math.min(
-      maxAncho / d.imagen.ancho,
-      maxAlto / d.imagen.alto
-    );
-    const w = d.imagen.ancho * escala;
-    const h = d.imagen.alto * escala;
+    const maxAlto = 110;
+    const escala = Math.min(maxAncho / img.ancho, maxAlto / img.alto);
+    const w = img.ancho * escala;
+    const h = img.alto * escala;
 
     if (y + h + 14 > ALTO - 20) {
       doc.addPage();
@@ -167,24 +182,22 @@ export function generarReportePdf(d: DatosReporte) {
     doc.setDrawColor(229, 231, 235);
     doc.setLineWidth(0.3);
     doc.rect(x - 1.5, y - 1.5, w + 3, h + 3, "S");
-    const formato = d.imagen.dataUrl.startsWith("data:image/png")
-      ? "PNG"
-      : "JPEG";
-    doc.addImage(d.imagen.dataUrl, formato, x, y, w, h);
+    const formato = img.dataUrl.startsWith("data:image/png") ? "PNG" : "JPEG";
+    doc.addImage(img.dataUrl, formato, x, y, w, h);
     y += h + 6;
-  } else {
-    doc.setFont("helvetica", "italic");
-    doc.setFontSize(9.5);
-    doc.setTextColor(...GRIS);
-    doc.text(
-      d.esPdfOriginal
-        ? "El comprobante original es un archivo PDF y se conserva adjunto en HogarFinance IA."
-        : "Este pago no tiene imagen de comprobante adjunta.",
-      MARGEN + 4,
-      y
-    );
-    y += 6;
-  }
+  };
+
+  seccion("Factura reclamada");
+  incrustar(
+    d.imagenFactura,
+    "Esta factura no tiene archivo adjunto en HogarFinance IA."
+  );
+
+  seccion("Comprobante de pago");
+  incrustar(
+    d.imagen,
+    "Este pago no tiene comprobante adjunto en HogarFinance IA."
+  );
 
   // Sello de registro
   doc.setFont("helvetica", "italic");

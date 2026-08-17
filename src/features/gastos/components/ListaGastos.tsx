@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { CategoriaIcon } from "@/components/ui/CategoriaIcon";
 import { rangoMes } from "@/lib/fechas";
+import { vistaPrevia } from "@/lib/vistaPrevia";
 import {
   formatMonto,
   formatMontoCompacto,
@@ -123,13 +124,10 @@ export function ListaGastos() {
     const abrir = expandido !== p.id;
     setExpandido(abrir ? p.id : null);
     if (abrir && p.imagen_url && !urls[p.imagen_url]) {
-      const supabase = createClient();
-      const { data } = await supabase.storage
-        .from(BUCKET_COMPROBANTES)
-        .createSignedUrl(p.imagen_url, 3600);
-      if (data?.signedUrl) {
-        setUrls((u) => ({ ...u, [p.imagen_url!]: data.signedUrl }));
-      }
+      // vistaPrevia devuelve la URL firmada si es imagen, o convierte el PDF
+      // a imagen al vuelo si lo es.
+      const url = await vistaPrevia(createClient(), p.imagen_url);
+      if (url) setUrls((u) => ({ ...u, [p.imagen_url!]: url }));
     }
   }
 
@@ -265,7 +263,6 @@ export function ListaGastos() {
             const abierto = expandido === p.id;
             const deslizado = swipeado === p.id;
             const url = p.imagen_url ? (urls[p.imagen_url] ?? null) : null;
-            const pdf = p.imagen_url?.toLowerCase().endsWith(".pdf") ?? false;
             return (
               <li
                 key={p.id}
@@ -344,17 +341,13 @@ export function ListaGastos() {
                 {abierto ? (
                   <div className="border-t border-gray-100 px-4 py-3">
                     {p.imagen_url ? (
-                      url && !pdf ? (
+                      url ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
                           src={url}
                           alt={`Comprobante de ${p.factura.proveedor}`}
                           className="mb-3 max-h-56 w-full rounded-xl bg-gray-50 object-contain"
                         />
-                      ) : pdf ? (
-                        <p className="mb-3 rounded-xl bg-gray-50 px-3 py-2 text-xs text-gray-500">
-                          📄 Comprobante en PDF adjunto
-                        </p>
                       ) : (
                         <div className="mb-3 h-32 animate-pulse rounded-xl bg-gray-100" />
                       )

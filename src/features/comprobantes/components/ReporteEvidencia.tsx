@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { imagenParaReporte, vistaPrevia } from "@/lib/vistaPrevia";
 import { Button } from "@/components/ui/Button";
 import { formatMonto, formatMontoCompacto, MESES, MESES_CORTOS } from "@/lib/formato";
-import { BUCKET_COMPROBANTES, CATEGORIAS } from "@/lib/supabase/types";
+import { CATEGORIAS } from "@/lib/supabase/types";
 import { generarReportePdf } from "../lib/generarReportePdf";
 import type { ComprobanteReporte } from "../lib/generarReportePdf";
 
@@ -17,8 +18,12 @@ type Datos = {
   titular: string;
   comprobante: FilaComprobante;
   historial: FilaComprobante[];
+  /** Vista previa del comprobante de pago (los PDFs ya vienen convertidos). */
   urlImagen: string | null;
-  esPdf: boolean;
+  /** Vista previa de la factura reclamada. */
+  urlFactura: string | null;
+  /** Ruta de la factura en Storage, para volver a convertirla al exportar. */
+  rutaFactura: string | null;
 };
 
 function fechaLegible(iso: string | null): string {
@@ -46,7 +51,7 @@ export function ReporteEvidencia({ comprobanteId }: { comprobanteId: string }) {
         supabase
           .from("comprobantes_pago")
           .select(
-            "id, monto, fecha_pago, metodo_pago, numero_operacion, imagen_url, fecha_creacion, factura:facturas(proveedor, categoria, periodo_mes, periodo_anio, estado, numero_comprobante)"
+            "id, monto, fecha_pago, metodo_pago, numero_operacion, imagen_url, fecha_creacion, factura:facturas(proveedor, categoria, periodo_mes, periodo_anio, estado, numero_comprobante, imagen_url)"
           )
           .eq("id", comprobanteId)
           .maybeSingle(),
@@ -115,14 +120,15 @@ export function ReporteEvidencia({ comprobanteId }: { comprobanteId: string }) {
           };
         });
 
-      const esPdf = comprobante.imagen_url?.toLowerCase().endsWith(".pdf") ?? false;
-      let urlImagen: string | null = null;
-      if (comprobante.imagen_url && !esPdf) {
-        const { data: firmada } = await supabase.storage
-          .from(BUCKET_COMPROBANTES)
-          .createSignedUrl(comprobante.imagen_url, 3600);
-        urlImagen = firmada?.signedUrl ?? null;
-      }
+      // Los PDFs se convierten a imagen al vuelo, así el reporte puede
+      // mostrarlos igual que una foto y sin guardar una copia aparte.
+      const rutaFactura =
+        (Array.isArray(fila.factura) ? fila.factura[0] : fila.factura)
+          ?.imagen_url ?? null;
+      const [urlImagen, urlFactura] = await Promise.all([
+        vistaPrevia(supabase, comprobante.imagen_url),
+        vistaPrevia(supabase, rutaFactura),
+      ]);
       if (cancelado) return;
 
       setDatos({
@@ -133,7 +139,8 @@ export function ReporteEvidencia({ comprobanteId }: { comprobanteId: string }) {
         comprobante,
         historial,
         urlImagen,
-        esPdf,
+        urlFactura,
+        rutaFactura,
       });
     }
     cargar();
@@ -147,37 +154,19 @@ export function ReporteEvidencia({ comprobanteId }: { comprobanteId: string }) {
     setGenerando(true);
     setError(null);
     try {
-      // Convierte la imagen firmada a dataURL para incrustarla en el PDF
-      let imagen: { dataUrl: string; ancho: number; alto: number } | null =
-        null;
-      if (datos.urlImagen) {
-        const respuesta = await fetch(datos.urlImagen);
-        const blob = await respuesta.blob();
-        const dataUrl = await new Promise<string>((resolver, rechazar) => {
-          const lector = new FileReader();
-          lector.onload = () => resolver(lector.result as string);
-          lector.onerror = () => rechazar(new Error("lectura"));
-          lector.readAsDataURL(blob);
-        });
-        const img = new Image();
-        await new Promise<void>((resolver, rechazar) => {
-          img.onload = () => resolver();
-          img.onerror = () => rechazar(new Error("imagen"));
-          img.src = dataUrl;
-        });
-        imagen = {
-          dataUrl,
-          ancho: img.naturalWidth,
-          alto: img.naturalHeight,
-        };
-      }
+      // Las dos imágenes, medidas y en dataURL, listas para jsPDF.
+      const supabase = createClient();
+      const [imagen, imagenFactura] = await Promise.all([
+        imagenParaReporte(supabase, datos.comprobante.imagen_url),
+        imagenParaReporte(supabase, datos.rutaFactura),
+      ]);
 
       generarReportePdf({
         titular: datos.titular,
         comprobante: datos.comprobante,
         historial: datos.historial,
         imagen,
-        esPdfOriginal: datos.esPdf,
+        imagenFactura,
         incluirHistorial,
       });
     } catch {
@@ -304,6 +293,22 @@ export function ReporteEvidencia({ comprobanteId }: { comprobanteId: string }) {
           {/* Comprobante */}
           <section>
             <h3 className="mb-1.5 border-l-2 border-secondary pl-2 text-[11px] font-bold uppercase tracking-wide text-gray-900">
+              Factura reclamada
+            </h3>
+            {datos.urlFactura ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={datos.urlFactura}
+                alt={`Factura de ${c.proveedor}`}
+                className="max-h-64 w-full rounded-xl border border-gray-200 bg-gray-50 object-contain"
+              />
+            ) : (
+              <p className="pl-2 text-xs italic text-gray-500">
+                Esta factura no tiene archivo adjunto; el reporte lo indica.
+              </p>
+            )}
+
+            <h3 className="mb-1.5 mt-4 border-l-2 border-secondary pl-2 text-[11px] font-bold uppercase tracking-wide text-gray-900">
               Comprobante de pago
             </h3>
             {datos.urlImagen ? (
@@ -315,9 +320,7 @@ export function ReporteEvidencia({ comprobanteId }: { comprobanteId: string }) {
               />
             ) : (
               <p className="pl-2 text-xs italic text-gray-500">
-                {datos.esPdf
-                  ? "El comprobante original es un PDF; en el reporte se deja constancia de su registro."
-                  : "Este pago no tiene imagen adjunta; el reporte lo indica."}
+                Este pago no tiene comprobante adjunto; el reporte lo indica.
               </p>
             )}
             <p className="mt-1.5 text-center text-[10px] italic text-secondary">
