@@ -40,4 +40,6 @@ Devolvé ÚNICAMENTE un objeto JSON, sin texto previo ni posterior y sin bloque 
 
 - "numero_comprobante_rotulo": copiá TEXTUALMENTE el rótulo impreso que acompaña al número que devolviste en el campo anterior, tal como figura en la factura. Si el número no tiene ningún rótulo al lado, devolvé null. No inventes un rótulo: si no lo leés, es null.
 
+- "numero_operacion": SOLO si el documento es un comprobante de pago, el identificador que le asignó el medio de pago. Figura junto a rótulos como "N.° de operación", "Número de operación de Mercado Pago", "Nro. de transacción", "Código de operación" o "Referencia". Casi siempre son solo dígitos, sin letras ni guiones: devolvelo igual, como cadena de texto. Es un campo DISTINTO del número de factura: si el documento es una factura y no un comprobante de pago, devolvé null.
+
 - "categoria": exactamente uno de estos valores: "electricidad", "agua", "gas", "internet", "alquiler", "expensas", "otro".`;

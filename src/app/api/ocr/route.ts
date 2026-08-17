@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { BUCKET_COMPROBANTES } from "@/lib/supabase/types";
-import { rotuloEsDeFactura, textoComprobante } from "./campos";
+import {
+  rotuloEsDeFactura,
+  textoComprobante,
+  textoOperacion,
+} from "./campos";
 import { PROMPT_OCR } from "./prompt";
 
 
@@ -22,6 +26,7 @@ export type ConfianzaOcr = {
   fecha_vencimiento: number;
   periodo: number;
   numero_comprobante: number;
+  numero_operacion: number;
   categoria: number;
 };
 
@@ -33,6 +38,8 @@ export type ResultadoOcr = {
   fecha_vencimiento_2: string | null;
   periodo: string | null;
   numero_comprobante: string | null;
+  /** Identificador del medio de pago; solo en comprobantes de pago. */
+  numero_operacion: string | null;
   categoria: string | null;
   /** Ajustes que el agente de aprendizaje aplicó sobre lo extraído. */
   aprendizaje: string[];
@@ -262,6 +269,9 @@ export async function POST(request: Request) {
     numero_comprobante: rotuloEsDeFactura(crudo.numero_comprobante_rotulo)
       ? textoComprobante(crudo.numero_comprobante)
       : null,
+    // El número de operación tiene su propia validación: es del medio de
+    // pago, no un comprobante fiscal, así que es puramente numérico.
+    numero_operacion: textoOperacion(crudo.numero_operacion),
     categoria: CATEGORIAS_VALIDAS.includes(categoria) ? categoria : null,
     aprendizaje: [],
     confianza: {
@@ -271,6 +281,7 @@ export async function POST(request: Request) {
       fecha_vencimiento: 0,
       periodo: 0,
       numero_comprobante: 0,
+      numero_operacion: 0,
       categoria: 0,
     },
   };
@@ -447,6 +458,14 @@ export async function POST(request: Request) {
               /^[A-Za-z0-9\-./ ]{6,}$/.test(resultado.numero_comprobante)
             : null
         ),
+    // Un número de operación válido no se puede contrastar contra nada:
+    // es único de ese pago. Si se leyó con formato razonable, 75.
+    numero_operacion: puntuar(
+      resultado.numero_operacion !== null,
+      resultado.numero_operacion
+        ? /^[A-Za-z0-9\-./ ]{5,}$/.test(resultado.numero_operacion)
+        : null
+    ),
     categoria: puntuar(
       resultado.categoria !== null,
       esConocido && resultado.proveedor

@@ -1,5 +1,9 @@
 import { expect, test } from "@playwright/test";
-import { rotuloEsDeFactura, textoComprobante } from "@/app/api/ocr/campos";
+import {
+  rotuloEsDeFactura,
+  textoComprobante,
+  textoOperacion,
+} from "@/app/api/ocr/campos";
 
 /**
  * Regresión: una factura de AySA se guardó sin número de comprobante.
@@ -86,4 +90,30 @@ test("descarta el numero cuando no hay rotulo", () => {
   expect(rotuloEsDeFactura("")).toBe(false);
   expect(rotuloEsDeFactura("   ")).toBe(false);
   expect(rotuloEsDeFactura(123)).toBe(false);
+});
+
+test("acepta un numero de operacion puramente numerico", () => {
+  // Caso real: Mercado Pago. El numero de operacion no lleva clase de
+  // comprobante, asi que la regla del numero de factura lo rechazaria.
+  expect(textoOperacion("170927893371")).toBe("170927893371");
+  expect(textoOperacion(170927893371)).toBe("170927893371");
+  expect(textoOperacion("548565621")).toBe("548565621");
+});
+
+test("acepta un numero de operacion con guiones o letras cortas", () => {
+  expect(textoOperacion("0001-00023456")).toBe("0001-00023456");
+  expect(textoOperacion("TRF-99887766")).toBe("TRF-99887766");
+});
+
+test("saca el rotulo del numero de operacion", () => {
+  expect(textoOperacion("N° de operación 170927893371")).toBe("170927893371");
+  expect(textoOperacion("Operación: 548565621")).toBe("548565621");
+});
+
+test("descarta lo que no es un numero de operacion", () => {
+  expect(textoOperacion("Número de operación")).toBeNull();
+  expect(textoOperacion("comprobante de transferencia")).toBeNull();
+  expect(textoOperacion(null)).toBeNull();
+  expect(textoOperacion("")).toBeNull();
+  expect(textoOperacion({})).toBeNull();
 });

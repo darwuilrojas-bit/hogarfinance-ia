@@ -188,7 +188,8 @@ export function RegistrarComprobanteForm({
         const iso = fechaAIso(r.fecha_pago);
         if (iso) setFechaPago(iso);
       }
-      if (r.numero_comprobante) setNumeroOperacion(r.numero_comprobante);
+      // El número de operación es el del medio de pago, no el de la factura.
+      if (r.numero_operacion) setNumeroOperacion(r.numero_operacion);
 
       if (standalone) {
         if (r.proveedor) setProveedorNuevo(r.proveedor);
@@ -680,7 +681,7 @@ export function RegistrarComprobanteForm({
           <EtiquetaConfianza
             texto="Número de operación"
             ocrListo={ocrListo}
-            score={ocr?.confianza.numero_comprobante ?? 0}
+            score={ocr?.confianza.numero_operacion ?? 0}
           />
         }
         type="text"

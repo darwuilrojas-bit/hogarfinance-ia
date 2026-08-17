@@ -59,6 +59,42 @@ export function rotuloEsDeFactura(rotulo: unknown): boolean {
   return ROTULOS_VALIDOS.some((valido) => limpio.includes(valido));
 }
 
+/**
+ * Número de operación de un comprobante de PAGO (transferencia, Mercado
+ * Pago, débito). A diferencia del número de factura, éste es casi siempre
+ * puramente numérico: no lleva clase de comprobante porque no es un
+ * comprobante fiscal sino el identificador que asigna el medio de pago.
+ *
+ * Por eso tiene su propia validación: exigirle una letra, como se le exige
+ * al número de factura, descartaría todos los números de operación reales.
+ */
+export function textoOperacion(v: unknown): string | null {
+  let texto: string;
+  if (typeof v === "number") {
+    if (!Number.isFinite(v)) return null;
+    texto = String(v);
+  } else if (typeof v === "string") {
+    texto = v.trim();
+  } else {
+    return null;
+  }
+
+  // El modelo a veces antepone el rótulo al valor.
+  texto = texto
+    .replace(
+      /^\s*(n[uú]mero de operaci[oó]n|n[°ºo]?\s*de operaci[oó]n|operaci[oó]n|referencia|nro\.?|n[uú]mero|n[°º])\s*[:.\-–]?\s*/i,
+      ""
+    )
+    .trim();
+
+  if (!texto) return null;
+  // Sin dígitos no es un identificador: el modelo devolvió el rótulo.
+  if (!/\d/.test(texto)) return null;
+  // Y no debe arrastrar palabras: un identificador no tiene texto corrido.
+  if (/[A-Za-zÁÉÍÓÚáéíóúÑñ]{4,}/.test(texto)) return null;
+  return texto;
+}
+
 export function textoComprobante(v: unknown): string | null {
   let texto: string;
   if (typeof v === "number") {
