@@ -2,7 +2,11 @@ import fs from "node:fs";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
 import { PROMPT_OCR } from "@/app/api/ocr/prompt";
-import { rotuloEsDeFactura, textoComprobante } from "@/app/api/ocr/campos";
+import {
+  rotuloEsDeFactura,
+  textoComprobante,
+  textoOperacion,
+} from "@/app/api/ocr/campos";
 
 /**
  * Banco de pruebas del OCR contra facturas reales.
@@ -49,6 +53,10 @@ type CasoEsperado = {
   /** null si la factura no tiene segundo vencimiento. */
   fecha_vencimiento_2?: string | null;
   categoria?: string;
+  /** Comprobantes de pago: número que asigna el medio de pago. */
+  numero_operacion?: string | null;
+  /** Comprobantes de pago: fecha en que se pagó, DD/MM/YYYY. */
+  fecha_pago?: string | null;
   /** Valores que el modelo suele confundir y NO debe devolver como número. */
   no_debe_devolver?: string[];
 };
@@ -190,6 +198,15 @@ test.describe("Extracción sobre facturas reales", () => {
       }
       if (caso.categoria !== undefined) {
         expect(crudo.categoria, "categoría").toBe(caso.categoria);
+      }
+      if (caso.numero_operacion !== undefined) {
+        expect(
+          textoOperacion(crudo.numero_operacion),
+          "número de operación"
+        ).toBe(caso.numero_operacion);
+      }
+      if (caso.fecha_pago !== undefined) {
+        expect(crudo.fecha_pago ?? null, "fecha de pago").toBe(caso.fecha_pago);
       }
     });
   }
