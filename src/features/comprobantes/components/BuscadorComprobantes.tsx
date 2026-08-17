@@ -146,10 +146,14 @@ export function BuscadorComprobantes() {
       setProveedores((provRes.data ?? []).map((p) => p.nombre));
 
       // URLs firmadas para las miniaturas, en una sola llamada
-      // (imagen del comprobante de pago + imagen de la factura original)
+      // (imagen del comprobante de pago + imagen de la factura original).
+      //
+      // Los PDFs quedan fuera a propósito: una URL firmada de un PDF no se
+      // puede dibujar en un <img>, y si se guardara acá, la conversión que
+      // corre al abrir el detalle la daría por hecha y no se ejecutaría.
       const rutas = lista
         .flatMap((c) => [c.imagen_url, c.factura?.imagen_url ?? null])
-        .filter((r): r is string => r !== null);
+        .filter((r): r is string => r !== null && !esPdf(r));
       if (rutas.length > 0) {
         const { data: firmadas } = await supabase.storage
           .from(BUCKET_COMPROBANTES)
@@ -242,8 +246,11 @@ export function BuscadorComprobantes() {
    * No se guarda ninguna copia en Storage.
    */
   async function mostrarPdfs(c: ComprobanteRow) {
+    // Se considera pendiente hasta que haya un dataURL: una URL firmada de
+    // un PDF no sirve para mostrarlo, así que no cuenta como resuelto.
     const pendientes = [c.imagen_url, c.factura?.imagen_url ?? null].filter(
-      (r): r is string => r !== null && esPdf(r) && !urls[r]
+      (r): r is string =>
+        r !== null && esPdf(r) && !urls[r]?.startsWith("data:")
     );
     if (pendientes.length === 0) return;
     const supabase = createClient();
